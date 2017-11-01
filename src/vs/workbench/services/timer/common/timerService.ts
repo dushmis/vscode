@@ -8,6 +8,14 @@ import { createDecorator } from 'vs/platform/instantiation/common/instantiation'
 
 export const ITimerService = createDecorator<ITimerService>('timerService');
 
+/* __GDPR__FRAGMENT__
+	"IMemoryInfo" : {
+		"workingSetSize" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"peakWorkingSetSize": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"privateBytes": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"sharedBytes": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" }
+	}
+*/
 export interface IMemoryInfo {
 	workingSetSize: number;
 	peakWorkingSetSize: number;
@@ -15,6 +23,41 @@ export interface IMemoryInfo {
 	sharedBytes: number;
 }
 
+/* __GDPR__FRAGMENT__
+	"IStartupMetrics" : {
+		"version" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"ellapsed" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedAppReady" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedWindowLoad" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedWindowLoadToRequire" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedExtensions" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedExtensionsReady" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedRequire" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedViewletRestore" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedEditorRestore" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedWorkbench" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"timers.ellapsedTimersToTimersComputed" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"platform" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"release" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"arch" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"totalmem" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"meminfo" : { "${inline}": [ "${IMemoryInfo}" ] },
+		"cpus.count" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"cpus.speed" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"cpus.model" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"initialStartup" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"hasAccessibilitySupport" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"isVMLikelyhood" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"emptyWorkbench" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"loadavg" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+		"${wildcard}": [
+			{
+				"${prefix}": "timers2.",
+				"${classification}": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" }
+			}
+		]
+	}
+*/
 export interface IStartupMetrics {
 	version: number;
 	ellapsed: number;
@@ -30,8 +73,10 @@ export interface IStartupMetrics {
 		ellapsedWorkbench: number;
 		ellapsedTimersToTimersComputed: number;
 	};
+	timers2: { [name: string]: number };
 	platform: string;
 	release: string;
+	arch: string;
 	totalmem: number;
 	freemem: number;
 	meminfo: IMemoryInfo;
@@ -44,14 +89,14 @@ export interface IStartupMetrics {
 }
 
 export interface IInitData {
-	start: Date;
+	start: number;
 
-	appReady: Date;
+	appReady: number;
 
-	windowLoad: Date;
+	windowLoad: number;
 
-	beforeLoadWorkbenchMain: Date;
-	afterLoadWorkbenchMain: Date;
+	beforeLoadWorkbenchMain: number;
+	afterLoadWorkbenchMain: number;
 
 	isInitialStartup: boolean;
 	hasAccessibilitySupport: boolean;
@@ -60,14 +105,14 @@ export interface IInitData {
 export interface ITimerService extends IInitData {
 	_serviceBrand: any;
 
-	beforeDOMContentLoaded: Date;
-	afterDOMContentLoaded: Date;
+	beforeDOMContentLoaded: number;
+	afterDOMContentLoaded: number;
 
-	beforeWorkbenchOpen: Date;
-	workbenchStarted: Date;
+	beforeWorkbenchOpen: number;
+	workbenchStarted: number;
 
-	beforeExtensionLoad: Date;
-	afterExtensionLoad: Date;
+	beforeExtensionLoad: number;
+	afterExtensionLoad: number;
 
 	restoreViewletDuration: number;
 	restoreEditorsDuration: number;

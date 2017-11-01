@@ -9,8 +9,10 @@ const gulp = require('gulp');
 const filter = require('gulp-filter');
 const es = require('event-stream');
 const gulptslint = require('gulp-tslint');
+const gulpeslint = require('gulp-eslint');
 const tsfmt = require('typescript-formatter');
 const tslint = require('tslint');
+const vfs = require('vinyl-fs');
 
 /**
  * Hygiene works by creating cascading subsets of all our files and
@@ -35,22 +37,30 @@ const eolFilter = [
 	'!ThirdPartyNotices.txt',
 	'!LICENSE.txt',
 	'!extensions/**/out/**',
+	'!test/smoke/out/**',
 	'!**/node_modules/**',
 	'!**/fixtures/**',
 	'!**/*.{svg,exe,png,bmp,scpt,bat,cmd,cur,ttf,woff,eot}',
 	'!build/{lib,tslintRules}/**/*.js',
 	'!build/monaco/**',
-	'!build/win32/**'
+	'!build/win32/**',
+	'!build/**/*.sh',
+	'!build/tfs/**/*.js',
+	'!**/Dockerfile'
 ];
 
 const indentationFilter = [
 	'**',
 	'!ThirdPartyNotices.txt',
 	'!**/*.md',
+	'!**/*.ps1',
 	'!**/*.template',
+	'!**/*.yaml',
 	'!**/*.yml',
 	'!**/lib/**',
-	'!**/*.d.ts',
+	'!extensions/**/*.d.ts',
+	'!src/typings/**/*.d.ts',
+	'!src/vs/*/**/*.d.ts',
 	'!**/*.d.ts.recipe',
 	'!test/assert.js',
 	'!**/package.json',
@@ -84,15 +94,30 @@ const copyrightFilter = [
 	'!**/*.xpm',
 	'!**/*.opts',
 	'!**/*.disabled',
+	'!build/**/*.init',
+	'!resources/linux/snap/snapcraft.yaml',
 	'!resources/win32/bin/code.js',
 	'!extensions/markdown/media/tomorrow.css',
 	'!extensions/html/server/src/modes/typescript/*'
 ];
 
+const eslintFilter = [
+	'src/**/*.js',
+	'build/gulpfile.*.js',
+	'!src/vs/loader.js',
+	'!src/vs/css.js',
+	'!src/vs/nls.js',
+	'!src/vs/css.build.js',
+	'!src/vs/nls.build.js',
+	'!src/**/winjs.base.raw.js',
+	'!src/**/raw.marked.js',
+	'!**/test/**'
+];
+
 const tslintFilter = [
 	'src/**/*.ts',
+	'test/**/*.ts',
 	'extensions/**/*.ts',
-	'!**/*.d.ts',
 	'!**/fixtures/**',
 	'!**/typings/**',
 	'!**/node_modules/**',
@@ -119,10 +144,18 @@ function reportFailures(failures) {
 	});
 }
 
+gulp.task('eslint', () => {
+	return vfs.src(all, { base: '.', follow: true, allowEmpty: true })
+		.pipe(filter(eslintFilter))
+		.pipe(gulpeslint('src/.eslintrc'))
+		.pipe(gulpeslint.formatEach('compact'))
+		.pipe(gulpeslint.failAfterError());
+});
+
 gulp.task('tslint', () => {
 	const options = { summarizeFailureOutput: true };
 
-	return gulp.src(all, { base: '.' })
+	return vfs.src(all, { base: '.', follow: true, allowEmpty: true })
 		.pipe(filter(tslintFilter))
 		.pipe(gulptslint({ rulesDirectory: 'build/lib/tslint' }))
 		.pipe(gulptslint.report(reportFailures, options));
@@ -171,7 +204,6 @@ const hygiene = exports.hygiene = (some, options) => {
 	});
 
 	const formatting = es.map(function (file, cb) {
-
 		tsfmt.processString(file.path, file.contents.toString('utf8'), {
 			verify: true,
 			tsfmt: true,
@@ -204,17 +236,27 @@ const hygiene = exports.hygiene = (some, options) => {
 		this.emit('data', file);
 	});
 
-	return gulp.src(some || all, { base: '.' })
+	const result = vfs.src(some || all, { base: '.', follow: true, allowEmpty: true })
 		.pipe(filter(f => !f.stat.isDirectory()))
 		.pipe(filter(eolFilter))
 		.pipe(options.skipEOL ? es.through() : eol)
 		.pipe(filter(indentationFilter))
 		.pipe(indentation)
 		.pipe(filter(copyrightFilter))
-		.pipe(copyrights)
+		.pipe(copyrights);
+
+	const typescript = result
 		.pipe(filter(tslintFilter))
 		.pipe(formatting)
-		.pipe(tsl)
+		.pipe(tsl);
+
+	const javascript = result
+		.pipe(filter(eslintFilter))
+		.pipe(gulpeslint('src/.eslintrc'))
+		.pipe(gulpeslint.formatEach('compact'))
+		.pipe(gulpeslint.failAfterError());
+
+	return es.merge(typescript, javascript)
 		.pipe(es.through(null, function () {
 			if (errorCount > 0) {
 				this.emit('error', 'Hygiene failed with ' + errorCount + ' errors. Check \'build/gulpfile.hygiene.js\'.');
@@ -224,7 +266,7 @@ const hygiene = exports.hygiene = (some, options) => {
 		}));
 };
 
-gulp.task('hygiene', () => hygiene());
+gulp.task('hygiene', () => hygiene(''));
 
 // this allows us to run hygiene as a git pre-commit hook
 if (require.main === module) {
@@ -237,6 +279,14 @@ if (require.main === module) {
 
 	cp.exec('git config core.autocrlf', (err, out) => {
 		const skipEOL = out.trim() === 'true';
+
+		if (process.argv.length > 2) {
+			return hygiene(process.argv.slice(2), { skipEOL: skipEOL }).on('error', err => {
+				console.error();
+				console.error(err);
+				process.exit(1);
+			});
+		}
 
 		cp.exec('git diff --cached --name-only', { maxBuffer: 2000 * 1024 }, (err, out) => {
 			if (err) {

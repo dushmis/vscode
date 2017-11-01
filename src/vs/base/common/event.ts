@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 'use strict';
 
-import { IDisposable, dispose, toDisposable } from 'vs/base/common/lifecycle';
+import { IDisposable, toDisposable, combinedDisposable, empty as EmptyDisposable } from 'vs/base/common/lifecycle';
 import CallbackList from 'vs/base/common/callbackList';
 import { EventEmitter } from 'vs/base/common/eventEmitter';
 import { TPromise } from 'vs/base/common/winjs.base';
@@ -28,6 +28,7 @@ export default Event;
 export interface EmitterOptions {
 	onFirstListenerAdd?: Function;
 	onFirstListenerDidAdd?: Function;
+	onListenerDidAdd?: Function;
 	onLastListenerRemove?: Function;
 }
 
@@ -81,10 +82,14 @@ export class Emitter<T> {
 					this._options.onFirstListenerAdd(this);
 				}
 
-				this._callbacks.add(listener, thisArgs);
+				const remove = this._callbacks.add(listener, thisArgs);
 
 				if (firstListener && this._options && this._options.onFirstListenerDidAdd) {
 					this._options.onFirstListenerDidAdd(this);
+				}
+
+				if (this._options && this._options.onListenerDidAdd) {
+					this._options.onListenerDidAdd(this, listener, thisArgs);
 				}
 
 				let result: IDisposable;
@@ -92,7 +97,7 @@ export class Emitter<T> {
 					dispose: () => {
 						result.dispose = Emitter._noop;
 						if (!this._disposed) {
-							this._callbacks.remove(listener, thisArgs);
+							remove();
 							if (this._options && this._options.onLastListenerRemove && this._callbacks.isEmpty()) {
 								this._options.onLastListenerRemove(this);
 							}
@@ -213,7 +218,7 @@ export class EventMultiplexer<T> implements IDisposable {
  */
 export function fromEventEmitter<T>(emitter: EventEmitter, eventType: string): Event<T> {
 	return function (listener: (e: T) => any, thisArgs?: any, disposables?: IDisposable[]): IDisposable {
-		const result = emitter.addListener2(eventType, function () {
+		const result = emitter.addListener(eventType, function () {
 			listener.apply(thisArgs, arguments);
 		});
 		if (Array.isArray(disposables)) {
@@ -250,6 +255,15 @@ export function fromPromise(promise: TPromise<any>): Event<void> {
 
 	shouldEmit = true;
 	return emitter.event;
+}
+
+export function toPromise<T>(event: Event<T>): TPromise<T> {
+	return new TPromise(complete => {
+		const sub = event(e => {
+			sub.dispose();
+			complete(e);
+		});
+	});
 }
 
 export function delayed<T>(promise: TPromise<Event<T>>): Event<T> {
@@ -290,19 +304,8 @@ export function once<T>(event: Event<T>): Event<T> {
 	};
 }
 
-export function any<T>(...events: Event<T>[]): Event<T> {
-	let listeners: IDisposable[] = [];
-
-	const emitter = new Emitter<T>({
-		onFirstListenerAdd() {
-			listeners = events.map(e => e(r => emitter.fire(r)));
-		},
-		onLastListenerRemove() {
-			listeners = dispose(listeners);
-		}
-	});
-
-	return emitter.event;
+export function anyEvent<T>(...events: Event<T>[]): Event<T> {
+	return (listener, thisArgs = null, disposables?) => combinedDisposable(events.map(event => event(e => listener.call(thisArgs, e), null, disposables)));
 }
 
 export function debounceEvent<T>(event: Event<T>, merger: (last: T, event: T) => T, delay?: number, leading?: boolean): Event<T>;
@@ -310,14 +313,17 @@ export function debounceEvent<I, O>(event: Event<I>, merger: (last: O, event: I)
 export function debounceEvent<I, O>(event: Event<I>, merger: (last: O, event: I) => O, delay: number = 100, leading = false): Event<O> {
 
 	let subscription: IDisposable;
-	let output: O;
-	let handle: number;
+	let output: O = undefined;
+	let handle: number = undefined;
+	let numDebouncedCalls = 0;
 
 	const emitter = new Emitter<O>({
 		onFirstListenerAdd() {
 			subscription = event(cur => {
+				numDebouncedCalls++;
 				output = merger(output, cur);
-				if (!handle && leading) {
+
+				if (leading && !handle) {
 					emitter.fire(output);
 				}
 
@@ -325,8 +331,12 @@ export function debounceEvent<I, O>(event: Event<I>, merger: (last: O, event: I)
 				handle = setTimeout(() => {
 					let _output = output;
 					output = undefined;
-					emitter.fire(_output);
-					handle = null;
+					handle = undefined;
+					if (!leading || numDebouncedCalls > 1) {
+						emitter.fire(_output);
+					}
+
+					numDebouncedCalls = 0;
 				}, delay);
 			});
 		},
@@ -406,15 +416,15 @@ class ChainableEvent<T> implements IChainableEvent<T> {
 
 	constructor(private _event: Event<T>) { }
 
-	map(fn) {
+	map<O>(fn: (i: T) => O): IChainableEvent<O> {
 		return new ChainableEvent(mapEvent(this._event, fn));
 	}
 
-	filter(fn) {
+	filter(fn: (e: T) => boolean): IChainableEvent<T> {
 		return new ChainableEvent(filterEvent(this._event, fn));
 	}
 
-	on(listener, thisArgs, disposables: IDisposable[]) {
+	on(listener: (e: T) => any, thisArgs: any, disposables: IDisposable[]) {
 		return this._event(listener, thisArgs, disposables);
 	}
 }
@@ -490,4 +500,49 @@ export function buffer<T>(event: Event<T>, nextTick = false, buffer: T[] = []): 
 	});
 
 	return emitter.event;
+}
+
+/**
+ * Similar to `buffer` but it buffers indefinitely and repeats
+ * the buffered events to every new listener.
+ */
+export function echo<T>(event: Event<T>, nextTick = false, buffer: T[] = []): Event<T> {
+	buffer = buffer.slice();
+
+	event(e => {
+		buffer.push(e);
+		emitter.fire(e);
+	});
+
+	const flush = (listener: (e: T) => any, thisArgs?: any) => buffer.forEach(e => listener.call(thisArgs, e));
+
+	const emitter = new Emitter<T>({
+		onListenerDidAdd(emitter, listener: (e: T) => any, thisArgs?: any) {
+			if (nextTick) {
+				setTimeout(() => flush(listener, thisArgs));
+			} else {
+				flush(listener, thisArgs);
+			}
+		}
+	});
+
+	return emitter.event;
+}
+
+export class Relay<T> implements IDisposable {
+
+	private emitter = new Emitter<T>();
+	readonly output: Event<T> = this.emitter.event;
+
+	private disposable: IDisposable = EmptyDisposable;
+
+	set input(event: Event<T>) {
+		this.disposable.dispose();
+		this.disposable = event(this.emitter.fire, this.emitter);
+	}
+
+	dispose() {
+		this.disposable.dispose();
+		this.emitter.dispose();
+	}
 }

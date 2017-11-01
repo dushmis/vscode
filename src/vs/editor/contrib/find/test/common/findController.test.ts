@@ -5,23 +5,33 @@
 'use strict';
 
 import * as assert from 'assert';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { Emitter } from 'vs/base/common/event';
 import { EditOperation } from 'vs/editor/common/core/editOperation';
 import { Position } from 'vs/editor/common/core/position';
 import { Selection } from 'vs/editor/common/core/selection';
 import { Range } from 'vs/editor/common/core/range';
-import { IRange } from 'vs/editor/common/editorCommon';
-import {
-	CommonFindController, FindStartFocusAction, IFindStartOptions,
-	NextMatchFindAction, StartFindAction, SelectHighlightsAction,
-	AddSelectionToNextFindMatchAction
-} from 'vs/editor/contrib/find/common/findController';
-import { MockCodeEditor, withMockCodeEditor } from 'vs/editor/test/common/mocks/mockCodeEditor';
+import { ICommonCodeEditor } from 'vs/editor/common/editorCommon';
+import { CommonFindController, FindStartFocusAction, IFindStartOptions, NextMatchFindAction, StartFindAction } from 'vs/editor/contrib/find/common/findController';
+import { withMockCodeEditor } from 'vs/editor/test/common/mocks/mockCodeEditor';
 import { HistoryNavigator } from 'vs/base/common/history';
+import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
+import { IStorageService } from 'vs/platform/storage/common/storage';
+import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
+import { Delayer } from 'vs/base/common/async';
 
-class TestFindController extends CommonFindController {
+export class TestFindController extends CommonFindController {
 
 	public hasFocus: boolean;
 	public delayUpdateHistory: boolean = false;
+	public delayedUpdateHistoryPromise: TPromise<void>;
+
+	private _delayedUpdateHistoryEvent: Emitter<void> = new Emitter<void>();
+
+	constructor(editor: ICommonCodeEditor, @IContextKeyService contextKeyService: IContextKeyService, @IStorageService storageService: IStorageService) {
+		super(editor, contextKeyService, storageService);
+		this._updateHistoryDelayer = new Delayer<void>(50);
+	}
 
 	protected _start(opts: IFindStartOptions): void {
 		super._start(opts);
@@ -32,19 +42,40 @@ class TestFindController extends CommonFindController {
 	}
 
 	protected _delayedUpdateHistory() {
+		if (!this.delayedUpdateHistoryPromise) {
+			this.delayedUpdateHistoryPromise = new TPromise<void>((c, e) => {
+				const disposable = this._delayedUpdateHistoryEvent.event(() => {
+					disposable.dispose();
+					this.delayedUpdateHistoryPromise = null;
+					c(null);
+				});
+			});
+		}
 		if (this.delayUpdateHistory) {
 			super._delayedUpdateHistory();
 		} else {
 			this._updateHistory();
 		}
 	}
+
+	protected _updateHistory() {
+		super._updateHistory();
+		this._delayedUpdateHistoryEvent.fire();
+	}
+}
+
+function fromRange(rng: Range): number[] {
+	return [rng.startLineNumber, rng.startColumn, rng.endLineNumber, rng.endColumn];
 }
 
 suite('FindController', () => {
-
-	function fromRange(rng: IRange): number[] {
-		return [rng.startLineNumber, rng.startColumn, rng.endLineNumber, rng.endColumn];
-	}
+	let queryState: { [key: string]: any; } = {};
+	let serviceCollection = new ServiceCollection();
+	serviceCollection.set(IStorageService, <any>{
+		get: (key: string) => queryState[key],
+		getBoolean: (key: string) => !!queryState[key],
+		store: (key: string, value: any) => { queryState[key] = value; }
+	});
 
 	test('issue #1857: F3, Find Next, acts like "Find Under Cursor"', () => {
 		withMockCodeEditor([
@@ -52,7 +83,7 @@ suite('FindController', () => {
 			'ABC',
 			'XYZ',
 			'ABC'
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			// The cursor is at the very top, of the file, at the first ABC
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
@@ -107,7 +138,7 @@ suite('FindController', () => {
 	test('issue #3090: F3 does not loop with two matches on a single line', () => {
 		withMockCodeEditor([
 			'import nls = require(\'vs/nls\');'
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			let nextMatchFindAction = new NextMatchFindAction();
@@ -132,7 +163,7 @@ suite('FindController', () => {
 			'var x = (3 * 5)',
 			'var y = (3 * 5)',
 			'var z = (3  * 5)',
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			let startFindAction = new StartFindAction();
@@ -153,39 +184,12 @@ suite('FindController', () => {
 		});
 	});
 
-	test('issue #8817: Cursor position changes when you cancel multicursor', () => {
-		withMockCodeEditor([
-			'var x = (3 * 5)',
-			'var y = (3 * 5)',
-			'var z = (3 * 5)',
-		], {}, (editor, cursor) => {
-
-			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
-			let selectHighlightsAction = new SelectHighlightsAction();
-
-			editor.setSelection(new Selection(2, 9, 2, 16));
-
-			selectHighlightsAction.run(null, editor);
-			assert.deepEqual(editor.getSelections().map(fromRange), [
-				[2, 9, 2, 16],
-				[1, 9, 1, 16],
-				[3, 9, 3, 16],
-			]);
-
-			editor.trigger('test', 'removeSecondaryCursors', null);
-
-			assert.deepEqual(fromRange(editor.getSelection()), [2, 9, 2, 16]);
-
-			findController.dispose();
-		});
-	});
-
 	test('issue #9043: Clear search scope when find widget is hidden', () => {
 		withMockCodeEditor([
 			'var x = (3 * 5)',
 			'var y = (3 * 5)',
 			'var z = (3 * 5)',
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			findController.start({
@@ -213,7 +217,7 @@ suite('FindController', () => {
 			'var x = (3 * 5)',
 			'var y = (3 * 5)',
 			'var z = (3 * 5)',
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			findController.getState().change({ searchString: '1' }, false);
@@ -229,7 +233,7 @@ suite('FindController', () => {
 			'var x = (3 * 5)',
 			'var y = (3 * 5)',
 			'var z = (3 * 5)',
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			findController.delayUpdateHistory = true;
@@ -237,10 +241,10 @@ suite('FindController', () => {
 			findController.getState().change({ searchString: '2' }, false);
 			findController.getState().change({ searchString: '3' }, false);
 
-			setTimeout(function () {
+			findController.delayedUpdateHistoryPromise.then(() => {
 				assert.deepEqual(['3'], toArray(findController.getHistory()));
 				done();
-			}, 500);
+			});
 		});
 	});
 
@@ -249,7 +253,7 @@ suite('FindController', () => {
 			'var x = (3 * 5)',
 			'var y = (3 * 5)',
 			'var z = (3 * 5)',
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			findController.getState().change({ searchString: '1' }, false);
@@ -266,7 +270,7 @@ suite('FindController', () => {
 			'var x = (3 * 5)',
 			'var y = (3 * 5)',
 			'var z = (3 * 5)',
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			findController.getState().change({ searchString: '1' }, false);
@@ -283,7 +287,7 @@ suite('FindController', () => {
 			'var x = (3 * 5)',
 			'var y = (3 * 5)',
 			'var z = (3 * 5)',
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			findController.getState().change({ searchString: '1' }, false);
@@ -303,7 +307,7 @@ suite('FindController', () => {
 			'var x = (3 * 5)',
 			'var y = (3 * 5)',
 			'var z = (3 * 5)',
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 			findController.getState().change({ searchString: '1' }, false);
@@ -318,42 +322,10 @@ suite('FindController', () => {
 		});
 	});
 
-	test('AddSelectionToNextFindMatchAction can work with multiline', () => {
-		withMockCodeEditor([
-			'',
-			'qwe',
-			'rty',
-			'',
-			'qwe',
-			'',
-			'rty',
-			'qwe',
-			'rty'
-		], {}, (editor, cursor) => {
-
-			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
-			let addSelectionToNextFindMatch = new AddSelectionToNextFindMatchAction();
-
-			editor.setSelection(new Selection(2, 1, 3, 4));
-
-			addSelectionToNextFindMatch.run(null, editor);
-			assert.deepEqual(editor.getSelections().map(fromRange), [
-				[2, 1, 3, 4],
-				[8, 1, 9, 4]
-			]);
-
-			editor.trigger('test', 'removeSecondaryCursors', null);
-
-			assert.deepEqual(fromRange(editor.getSelection()), [2, 1, 3, 4]);
-
-			findController.dispose();
-		});
-	});
-
 	test('issue #18111: Regex replace with single space replaces with no space', () => {
 		withMockCodeEditor([
 			'HRESULT OnAmbientPropertyChange(DISPID   dispid);'
-		], {}, (editor, cursor) => {
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
 
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
 
@@ -375,6 +347,33 @@ suite('FindController', () => {
 		});
 	});
 
+	test('issue #24714: Regular expression with ^ in search & replace', () => {
+		withMockCodeEditor([
+			'',
+			'line2',
+			'line3'
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
+
+			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
+
+			let startFindAction = new StartFindAction();
+			startFindAction.run(null, editor);
+
+			findController.getState().change({ searchString: '^', replaceString: 'x', isRegex: true }, false);
+			findController.moveToNextMatch();
+
+			assert.deepEqual(editor.getSelections().map(fromRange), [
+				[2, 1, 2, 1]
+			]);
+
+			findController.replace();
+
+			assert.deepEqual(editor.getValue(), '\nxline2\nline3');
+
+			findController.dispose();
+		});
+	});
+
 	function toArray(historyNavigator: HistoryNavigator<string>): string[] {
 		let result = [];
 		historyNavigator.first();
@@ -385,160 +384,86 @@ suite('FindController', () => {
 		}
 		return result;
 	}
+});
 
-	function testAddSelectionToNextFindMatchAction(callback: (editor: MockCodeEditor, action: AddSelectionToNextFindMatchAction) => void): void {
+suite('FindController query options persistence', () => {
+	let queryState: { [key: string]: any; } = {};
+	queryState['editor.isRegex'] = false;
+	queryState['editor.matchCase'] = false;
+	queryState['editor.wholeWord'] = false;
+	let serviceCollection = new ServiceCollection();
+	serviceCollection.set(IStorageService, <any>{
+		get: (key: string) => queryState[key],
+		getBoolean: (key: string) => !!queryState[key],
+		store: (key: string, value: any) => { queryState[key] = value; }
+	});
+
+	test('matchCase', () => {
 		withMockCodeEditor([
-			'abc pizza',
-			'abc house',
-			'abc bar'
-		], {}, (editor, cursor) => {
-
+			'abc',
+			'ABC',
+			'XYZ',
+			'ABC'
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
+			queryState = { 'editor.isRegex': false, 'editor.matchCase': true, 'editor.wholeWord': false };
+			// The cursor is at the very top, of the file, at the first ABC
 			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
+			let findState = findController.getState();
+			let startFindAction = new StartFindAction();
 
-			let action = new AddSelectionToNextFindMatchAction();
+			// I hit Ctrl+F to show the Find dialog
+			startFindAction.run(null, editor);
 
-			callback(editor, action);
+			// I type ABC.
+			findState.change({ searchString: 'ABC' }, true);
+			// The second ABC is highlighted as matchCase is true.
+			assert.deepEqual(fromRange(editor.getSelection()), [2, 1, 2, 4]);
 
 			findController.dispose();
 		});
-	}
+	});
 
-	test('AddSelectionToNextFindMatchAction starting with single collapsed selection', () => {
-		testAddSelectionToNextFindMatchAction((editor, action) => {
-			editor.setSelections([
-				new Selection(1, 2, 1, 2),
-			]);
+	queryState = { 'editor.isRegex': false, 'editor.matchCase': false, 'editor.wholeWord': true };
 
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-			]);
+	test('wholeWord', () => {
+		withMockCodeEditor([
+			'ABC',
+			'AB',
+			'XYZ',
+			'ABC'
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
+			queryState = { 'editor.isRegex': false, 'editor.matchCase': false, 'editor.wholeWord': true };
+			// The cursor is at the very top, of the file, at the first ABC
+			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
+			let findState = findController.getState();
+			let startFindAction = new StartFindAction();
 
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-			]);
+			// I hit Ctrl+F to show the Find dialog
+			startFindAction.run(null, editor);
 
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-				new Selection(3, 1, 3, 4),
-			]);
+			// I type AB.
+			findState.change({ searchString: 'AB' }, true);
+			// The second AB is highlighted as wholeWord is true.
+			assert.deepEqual(fromRange(editor.getSelection()), [2, 1, 2, 3]);
 
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-				new Selection(3, 1, 3, 4),
-			]);
+			findController.dispose();
 		});
 	});
 
-	test('AddSelectionToNextFindMatchAction starting with two selections, one being collapsed 1)', () => {
-		testAddSelectionToNextFindMatchAction((editor, action) => {
-			editor.setSelections([
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 2, 2, 2),
-			]);
+	test('toggling options is saved', () => {
+		withMockCodeEditor([
+			'ABC',
+			'AB',
+			'XYZ',
+			'ABC'
+		], { serviceCollection: serviceCollection }, (editor, cursor) => {
+			queryState = { 'editor.isRegex': false, 'editor.matchCase': false, 'editor.wholeWord': true };
+			// The cursor is at the very top, of the file, at the first ABC
+			let findController = editor.registerAndInstantiateContribution<TestFindController>(TestFindController);
+			findController.toggleRegex();
+			assert.equal(queryState['editor.isRegex'], true);
 
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-				new Selection(3, 1, 3, 4),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-				new Selection(3, 1, 3, 4),
-			]);
-		});
-	});
-
-	test('AddSelectionToNextFindMatchAction starting with two selections, one being collapsed 2)', () => {
-		testAddSelectionToNextFindMatchAction((editor, action) => {
-			editor.setSelections([
-				new Selection(1, 2, 1, 2),
-				new Selection(2, 1, 2, 4),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-				new Selection(3, 1, 3, 4),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-				new Selection(3, 1, 3, 4),
-			]);
-		});
-	});
-
-	test('AddSelectionToNextFindMatchAction starting with all collapsed selections', () => {
-		testAddSelectionToNextFindMatchAction((editor, action) => {
-			editor.setSelections([
-				new Selection(1, 2, 1, 2),
-				new Selection(2, 2, 2, 2),
-				new Selection(3, 1, 3, 1),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-				new Selection(3, 1, 3, 4),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 1, 1, 4),
-				new Selection(2, 1, 2, 4),
-				new Selection(3, 1, 3, 4),
-			]);
-		});
-	});
-
-	test('AddSelectionToNextFindMatchAction starting with all collapsed selections on different words', () => {
-		testAddSelectionToNextFindMatchAction((editor, action) => {
-			editor.setSelections([
-				new Selection(1, 6, 1, 6),
-				new Selection(2, 6, 2, 6),
-				new Selection(3, 6, 3, 6),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 5, 1, 10),
-				new Selection(2, 5, 2, 10),
-				new Selection(3, 5, 3, 8),
-			]);
-
-			action.run(null, editor);
-			assert.deepEqual(editor.getSelections(), [
-				new Selection(1, 5, 1, 10),
-				new Selection(2, 5, 2, 10),
-				new Selection(3, 5, 3, 8),
-			]);
+			findController.dispose();
 		});
 	});
 });

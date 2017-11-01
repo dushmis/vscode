@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import { SignatureHelpProvider, SignatureHelp, SignatureInformation, ParameterInformation, TextDocument, Position, CancellationToken } from 'vscode';
 
 import * as Previewer from './previewer';
 import * as Proto from '../protocol';
 import { ITypescriptServiceClient } from '../typescriptService';
+import { vsPositionToTsFileLocation } from '../utils/convert';
 
 export default class TypeScriptSignatureHelpProvider implements SignatureHelpProvider {
 
@@ -21,11 +20,7 @@ export default class TypeScriptSignatureHelpProvider implements SignatureHelpPro
 		if (!filepath) {
 			return Promise.resolve(null);
 		}
-		const args: Proto.SignatureHelpRequestArgs = {
-			file: filepath,
-			line: position.line + 1,
-			offset: position.character + 1
-		};
+		const args: Proto.SignatureHelpRequestArgs = vsPositionToTsFileLocation(filepath, position);
 		return this.client.execute('signatureHelp', args, token).then((response) => {
 			const info = response.body;
 			if (!info) {
@@ -61,13 +56,12 @@ export default class TypeScriptSignatureHelpProvider implements SignatureHelpPro
 					}
 				});
 				signature.label += Previewer.plain(item.suffixDisplayParts);
-				signature.documentation = Previewer.plain(item.documentation);
+				signature.documentation = Previewer.markdownDocumentation(item.documentation, item.tags);
 				result.signatures.push(signature);
 			});
 
 			return result;
-		}, (err: any) => {
-			this.client.error(`'signatureHelp' request failed with error.`, err);
+		}, () => {
 			return null;
 		});
 	}

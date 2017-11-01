@@ -176,6 +176,10 @@
 				</dict>
 				<dict>
 					<key>include</key>
+					<string>#fenced_code_block_scss</string>
+				</dict>
+				<dict>
+					<key>include</key>
 					<string>#fenced_code_block_perl6</string>
 				</dict>
 				<dict>
@@ -213,6 +217,10 @@
 				<dict>
 					<key>include</key>
 					<string>#fenced_code_block_csharp</string>
+				</dict>
+				<dict>
+					<key>include</key>
+					<string>#fenced_code_block_fsharp</string>
 				</dict>
 				<dict>
 					<key>include</key>
@@ -346,11 +354,11 @@
 										</dict>
 									</array>
 									<key>while</key>
-									<string>^\s*(?!&lt;/(script|style|pre)&gt;)</string>
+									<string>^(?!.*&lt;/(script|style|pre)&gt;)</string>
 								</dict>
 							</array>
 							<key>end</key>
-							<string>(?=&lt;/(script|style|pre)&gt;)</string>
+							<string>(?=.*&lt;/(script|style|pre)&gt;)</string>
 						</dict>
 						<dict>
 							<key>begin</key>
@@ -580,7 +588,7 @@
 				<key>fenced_code_block_css</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((css|css.erb)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(css|css.erb)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -618,6 +626,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.css</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -631,7 +641,7 @@
 				<key>fenced_code_block_basic</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((html|htm|shtml|xhtml|inc|tmpl|tpl)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(html|htm|shtml|xhtml|inc|tmpl|tpl)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -669,6 +679,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.html</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -682,7 +694,7 @@
 				<key>fenced_code_block_ini</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((ini|conf)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(ini|conf)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -713,7 +725,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -721,6 +732,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.ini</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -734,7 +747,7 @@
 				<key>fenced_code_block_java</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((java|bsh)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(java|bsh)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -765,7 +778,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -773,6 +785,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.java</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -786,7 +800,7 @@
 				<key>fenced_code_block_lua</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((lua)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(lua)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -817,7 +831,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -825,6 +838,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.lua</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -838,7 +853,7 @@
 				<key>fenced_code_block_makefile</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((Makefile|makefile|GNUmakefile|OCamlMakefile)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(Makefile|makefile|GNUmakefile|OCamlMakefile)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -869,7 +884,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -877,6 +891,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.makefile</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -890,7 +906,7 @@
 				<key>fenced_code_block_perl</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((perl|pl|pm|pod|t|PL|psgi|vcl)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(perl|pl|pm|pod|t|PL|psgi|vcl)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -921,7 +937,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -929,6 +944,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.perl</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -942,7 +959,7 @@
 				<key>fenced_code_block_r</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((R|r|s|S|Rprofile)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(R|r|s|S|Rprofile)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -980,6 +997,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.r</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -993,7 +1012,7 @@
 				<key>fenced_code_block_ruby</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((ruby|rb|rbx|rjs|Rakefile|rake|cgi|fcgi|gemspec|irbrc|Capfile|ru|prawn|Cheffile|Gemfile|Guardfile|Hobofile|Vagrantfile|Appraisals|Rantfile|Berksfile|Berksfile.lock|Thorfile|Puppetfile)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(ruby|rb|rbx|rjs|Rakefile|rake|cgi|fcgi|gemspec|irbrc|Capfile|ru|prawn|Cheffile|Gemfile|Guardfile|Hobofile|Vagrantfile|Appraisals|Rantfile|Berksfile|Berksfile.lock|Thorfile|Puppetfile)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1024,7 +1043,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1032,6 +1050,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.ruby</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1044,20 +1064,8 @@
 				</dict>
 				<key>fenced_code_block_php</key>
 				<dict>
-					<key>comment</key>
-					<string>
-					In fenced PHP code blocks, we match a "fuzzy" version of the PHP language.
-					This is because code blocks may be an incomplete PHP script that lacks a script
-					section start tag, and we still want to provide syntax highlighting, rather
-					than adhering to the actual grammar, where everything not prepended by a
-					start tag would be ignored. Additionally, we want to provide highlighting
-					for potential non-PHP languages (in particular HTML).
-
-					There are certainly plenty of edge cases here, but this seems to cover most popular
-					scenarios, and also appears to be consistent with the approach that GitHub takes.
-					</string>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((php|php3|php4|php5|phpt|phtml|aw|ctp)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(php|php3|php4|php5|phpt|phtml|aw|ctp)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1088,7 +1096,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1096,17 +1103,11 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.php</string>
 							<key>patterns</key>
 							<array>
 								<dict>
-									<key>comment</key>
-									<string>
-
-
-									Left to its own devices, the PHP grammar will match HTML as a combination of operators
-									and constants. Therefore, HTML must take precedence over PHP in order to get proper
-									syntax highlighting.
-									</string>
 									<key>include</key>
 									<string>text.html.basic</string>
 								</dict>
@@ -1121,7 +1122,7 @@
 				<key>fenced_code_block_sql</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((sql|ddl|dml)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(sql|ddl|dml)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1152,7 +1153,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1160,6 +1160,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.sql</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1173,7 +1175,7 @@
 				<key>fenced_code_block_vs_net</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((vb)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(vb)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1204,7 +1206,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1212,6 +1213,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.vs_net</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1225,7 +1228,7 @@
 				<key>fenced_code_block_xml</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((xml|xsd|tld|jsp|pt|cpt|dtml|rss|opml)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(xml|xsd|tld|jsp|pt|cpt|dtml|rss|opml)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1256,7 +1259,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1264,6 +1266,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.xml</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1277,7 +1281,7 @@
 				<key>fenced_code_block_xsl</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((xsl|xslt)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(xsl|xslt)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1308,7 +1312,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1316,6 +1319,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.xsl</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1329,7 +1334,7 @@
 				<key>fenced_code_block_yaml</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((yaml|yml)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(yaml|yml)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1360,7 +1365,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1368,6 +1372,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.yaml</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1381,7 +1387,7 @@
 				<key>fenced_code_block_dosbatch</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((bat|batch)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(bat|batch)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1412,7 +1418,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1420,6 +1425,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.dosbatch</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1433,7 +1440,7 @@
 				<key>fenced_code_block_clojure</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((clj|cljs|clojure)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(clj|cljs|clojure)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1464,7 +1471,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1472,6 +1478,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.clojure</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1485,7 +1493,7 @@
 				<key>fenced_code_block_coffee</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((coffee|Cakefile|coffee.erb)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(coffee|Cakefile|coffee.erb)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1516,7 +1524,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1524,6 +1531,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.coffee</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1537,7 +1546,7 @@
 				<key>fenced_code_block_c</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((c|h)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(c|h)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1575,6 +1584,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.c</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1588,7 +1599,7 @@
 				<key>fenced_code_block_cpp</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((cpp|c\+\+|cxx)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(cpp|c\+\+|cxx)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1626,6 +1637,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.cpp</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1639,7 +1652,7 @@
 				<key>fenced_code_block_diff</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((patch|diff|rej)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(patch|diff|rej)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1670,7 +1683,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1678,6 +1690,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.diff</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1691,7 +1705,7 @@
 				<key>fenced_code_block_dockerfile</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((dockerfile|Dockerfile)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(dockerfile|Dockerfile)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1722,7 +1736,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1730,6 +1743,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.dockerfile</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1743,7 +1758,7 @@
 				<key>fenced_code_block_git_commit</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((COMMIT_EDITMSG|MERGE_MSG)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(COMMIT_EDITMSG|MERGE_MSG)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1774,7 +1789,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1782,6 +1796,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.git_commit</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1795,7 +1811,7 @@
 				<key>fenced_code_block_git_rebase</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((git-rebase-todo)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(git-rebase-todo)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1826,7 +1842,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1834,6 +1849,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.git_rebase</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1847,7 +1864,7 @@
 				<key>fenced_code_block_go</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((go|golang)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(go|golang)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1878,7 +1895,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1886,6 +1902,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.go</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1899,7 +1917,7 @@
 				<key>fenced_code_block_groovy</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((groovy|gvy)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(groovy|gvy)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1930,7 +1948,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1938,6 +1955,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.groovy</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -1951,7 +1970,7 @@
 				<key>fenced_code_block_jade</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((jade)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(jade|pug)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -1982,7 +2001,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -1990,6 +2008,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.jade</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2003,7 +2023,7 @@
 				<key>fenced_code_block_js</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((js|jsx|javascript)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(js|jsx|javascript|es6|mjs)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2034,7 +2054,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2042,6 +2061,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.javascript</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2055,7 +2076,7 @@
 				<key>fenced_code_block_js_regexp</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((regexp)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(regexp)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2086,7 +2107,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2094,6 +2114,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.js_regexp</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2107,7 +2129,7 @@
 				<key>fenced_code_block_json</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((json|sublime-settings|sublime-menu|sublime-keymap|sublime-mousemap|sublime-theme|sublime-build|sublime-project|sublime-completions)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(json|sublime-settings|sublime-menu|sublime-keymap|sublime-mousemap|sublime-theme|sublime-build|sublime-project|sublime-completions)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2138,7 +2160,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2146,6 +2167,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.json</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2159,7 +2182,7 @@
 				<key>fenced_code_block_less</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((less)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(less)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2190,7 +2213,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2198,6 +2220,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.less</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2211,7 +2235,7 @@
 				<key>fenced_code_block_objc</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((objectivec|mm|objc|obj-c|m|h)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(objectivec|objective-c|mm|objc|obj-c|m|h)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2242,7 +2266,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2250,6 +2273,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.objc</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2260,10 +2285,10 @@
 						</dict>
 					</array>
 				</dict>
-				<key>fenced_code_block_perl6</key>
+				<key>fenced_code_block_scss</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((perl6|p6|pl6|pm6|nqp)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(scss)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2294,7 +2319,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2302,6 +2326,61 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.scss</string>
+							<key>patterns</key>
+							<array>
+								<dict>
+									<key>include</key>
+									<string>source.css.scss</string>
+								</dict>
+							</array>
+						</dict>
+					</array>
+				</dict>
+				<key>fenced_code_block_perl6</key>
+				<dict>
+					<key>begin</key>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(perl6|p6|pl6|pm6|nqp)(\s+[^`~]*)?$)</string>
+					<key>name</key>
+					<string>markup.fenced_code.block.markdown</string>
+					<key>end</key>
+					<string>(^|\G)(\2|\s{0,3})(\3)\s*$</string>
+					<key>beginCaptures</key>
+					<dict>
+						<key>3</key>
+						<dict>
+							<key>name</key>
+							<string>punctuation.definition.markdown</string>
+						</dict>
+						<key>5</key>
+						<dict>
+							<key>name</key>
+							<string>fenced_code.block.language</string>
+						</dict>
+						<key>6</key>
+						<dict>
+							<key>name</key>
+							<string>fenced_code.block.language.attributes</string>
+						</dict>
+					</dict>
+					<key>endCaptures</key>
+					<dict>
+						<key>3</key>
+						<dict>
+							<key>name</key>
+							<string>punctuation.definition.markdown</string>
+						</dict>
+					</dict>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>begin</key>
+							<string>(^|\G)(\s*)(.*)</string>
+							<key>while</key>
+							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.perl6</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2315,7 +2394,7 @@
 				<key>fenced_code_block_powershell</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((powershell|ps1|psm1|psd1)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(powershell|ps1|psm1|psd1)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2346,7 +2425,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2354,6 +2432,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.powershell</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2367,7 +2447,7 @@
 				<key>fenced_code_block_python</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((python|py|py3|rpy|pyw|cpy|SConstruct|Sconstruct|sconstruct|SConscript|gyp|gypi)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(python|py|py3|rpy|pyw|cpy|SConstruct|Sconstruct|sconstruct|SConscript|gyp|gypi)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2405,6 +2485,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.python</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2418,7 +2500,7 @@
 				<key>fenced_code_block_regexp_python</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((re)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(re)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2449,7 +2531,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2457,6 +2538,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.regexp_python</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2470,7 +2553,7 @@
 				<key>fenced_code_block_rust</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((rust|rs)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(rust|rs)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2501,7 +2584,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2509,6 +2591,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.rust</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2519,10 +2603,10 @@
 						</dict>
 					</array>
 				</dict>
-                <key>fenced_code_block_scala</key>
+				<key>fenced_code_block_scala</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((scala|sbt)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(scala|sbt)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2553,7 +2637,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2561,6 +2644,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.scala</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2574,7 +2659,7 @@
 				<key>fenced_code_block_shell</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((shell|sh|bash|zsh|bashrc|bash_profile|bash_login|profile|bash_logout|.textmate_init)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(shell|sh|bash|zsh|bashrc|bash_profile|bash_login|profile|bash_logout|.textmate_init)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2605,7 +2690,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2613,6 +2697,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.shellscript</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2626,7 +2712,7 @@
 				<key>fenced_code_block_ts</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((typescript|ts)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(typescript|ts)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2657,7 +2743,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2665,6 +2750,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.typescript</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2678,7 +2765,7 @@
 				<key>fenced_code_block_tsx</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((tsx)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(tsx)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2709,7 +2796,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2717,6 +2803,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.typescriptreact</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2730,7 +2818,7 @@
 				<key>fenced_code_block_csharp</key>
 				<dict>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*((cs|csharp|c#)(\s+.*)?$)</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(cs|csharp|c#)(\s+[^`~]*)?$)</string>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>end</key>
@@ -2761,7 +2849,6 @@
 							<string>punctuation.definition.markdown</string>
 						</dict>
 					</dict>
-
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -2769,6 +2856,8 @@
 							<string>(^|\G)(\s*)(.*)</string>
 							<key>while</key>
 							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.csharp</string>
 							<key>patterns</key>
 							<array>
 								<dict>
@@ -2779,12 +2868,65 @@
 						</dict>
 					</array>
 				</dict>
+				<key>fenced_code_block_fsharp</key>
+				<dict>
+					<key>begin</key>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?i:(fs|fsharp|f#)(\s+[^`~]*)?$)</string>
+					<key>name</key>
+					<string>markup.fenced_code.block.markdown</string>
+					<key>end</key>
+					<string>(^|\G)(\2|\s{0,3})(\3)\s*$</string>
+					<key>beginCaptures</key>
+					<dict>
+						<key>3</key>
+						<dict>
+							<key>name</key>
+							<string>punctuation.definition.markdown</string>
+						</dict>
+						<key>5</key>
+						<dict>
+							<key>name</key>
+							<string>fenced_code.block.language</string>
+						</dict>
+						<key>6</key>
+						<dict>
+							<key>name</key>
+							<string>fenced_code.block.language.attributes</string>
+						</dict>
+					</dict>
+					<key>endCaptures</key>
+					<dict>
+						<key>3</key>
+						<dict>
+							<key>name</key>
+							<string>punctuation.definition.markdown</string>
+						</dict>
+					</dict>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>begin</key>
+							<string>(^|\G)(\s*)(.*)</string>
+							<key>while</key>
+							<string>(^|\G)(?!\s*([`~]{3,})\s*$)</string>
+							<key>contentName</key>
+							<string>meta.embedded.block.fsharp</string>
+							<key>patterns</key>
+							<array>
+								<dict>
+									<key>include</key>
+									<string>source.fsharp</string>
+								</dict>
+							</array>
+						</dict>
+					</array>
+				</dict>
 				<key>fenced_code_block_unknown</key>
 				<dict>
 					<key>name</key>
 					<string>markup.fenced_code.block.markdown</string>
 					<key>begin</key>
-					<string>(^|\G)(\s*)([`~]{3,})\s*(.*)?$</string>
+					<string>(^|\G)(\s*)(`{3,}|~{3,})\s*(?=([^`~]*)?$)</string>
 					<key>end</key>
 					<string>(^|\G)(\2|\s{0,3})(\3)\s*$</string>
 					<key>beginCaptures</key>
@@ -3486,7 +3628,7 @@
 						</dict>
 					</dict>
 					<key>match</key>
-					<string>(\[)((?&lt;square&gt;[^\[\]\\]|\\.|\[\g&lt;square&gt;*+\])*+)(\])[ ]?(\[)([^\]]*+)(\])</string>
+					<string>(\[)((?&lt;square&gt;[^\[\]\\]|\\.|\[\g&lt;square&gt;*+\])*+)(\])(\[)([^\]]*+)(\])</string>
 					<key>name</key>
 					<string>meta.link.reference.markdown</string>
 				</dict>
@@ -3543,16 +3685,18 @@
 					<key>match</key>
 					<string>(`+)([^`]|(?!(?&lt;!`)\1(?!`))`)*+(\1)</string>
 					<key>name</key>
-					<string>markup.inline.raw.markdown</string>
+					<string>markup.inline.raw.string.markdown</string>
 				</dict>
 			</dict>
 		</dict>
 		<key>frontMatter</key>
 		<dict>
+			<key>contentName</key>
+			<string>meta.embedded.block.frontmatter</string>
 			<key>begin</key>
 			<string>\A-{3}\s*$</string>
 			<key>while</key>
-			<string>^(?!-{3}\s*$)</string>
+			<string>^(?!(-{3}|\.{3})\s*$)</string>
 			<key>patterns</key>
 			<array>
 				<dict>

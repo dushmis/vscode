@@ -6,7 +6,7 @@
 
 import { LanguageModelCache, getLanguageModelCache } from '../languageModelCache';
 import { SymbolInformation, SymbolKind, CompletionItem, Location, SignatureHelp, SignatureInformation, ParameterInformation, Definition, TextEdit, TextDocument, Diagnostic, DiagnosticSeverity, Range, CompletionItemKind, Hover, MarkedString, DocumentHighlight, DocumentHighlightKind, CompletionList, Position, FormattingOptions } from 'vscode-languageserver-types';
-import { LanguageMode } from './languageModes';
+import { LanguageMode, Settings } from './languageModes';
 import { getWordAtText, startsWith, isWhitespaceOnly, repeat } from '../utils/strings';
 import { HTMLDocumentRegions } from './embeddedSupport';
 
@@ -21,7 +21,7 @@ const JS_WORD_REGEX = /(-?\d*\.\d\w*)|([^\`\~\!\@\#\%\^\&\*\(\)\-\=\+\[\{\]\}\\\
 export function getJavascriptMode(documentRegions: LanguageModelCache<HTMLDocumentRegions>): LanguageMode {
 	let jsDocuments = getLanguageModelCache<TextDocument>(10, 60, document => documentRegions.get(document).getEmbeddedDocument('javascript'));
 
-	let compilerOptions: ts.CompilerOptions = { allowNonTsExtensions: true, allowJs: true, target: ts.ScriptTarget.Latest, moduleResolution: ts.ModuleResolutionKind.Classic };
+	let compilerOptions: ts.CompilerOptions = { allowNonTsExtensions: true, allowJs: true, lib: ['lib.es6.d.ts'], target: ts.ScriptTarget.Latest, moduleResolution: ts.ModuleResolutionKind.Classic };
 	let currentTextDocument: TextDocument;
 	let scriptFileVersion: number = 0;
 	function updateCurrentTextDocument(doc: TextDocument) {
@@ -30,9 +30,10 @@ export function getJavascriptMode(documentRegions: LanguageModelCache<HTMLDocume
 			scriptFileVersion++;
 		}
 	}
-	let host = {
+	const host: ts.LanguageServiceHost = {
 		getCompilationSettings: () => compilerOptions,
 		getScriptFileNames: () => [FILE_NAME, JQUERY_D_TS],
+		getScriptKind: () => ts.ScriptKind.JS,
 		getScriptVersion: (fileName: string) => {
 			if (fileName === FILE_NAME) {
 				return String(scriptFileVersion);
@@ -59,19 +60,20 @@ export function getJavascriptMode(documentRegions: LanguageModelCache<HTMLDocume
 	};
 	let jsLanguageService = ts.createLanguageService(host);
 
-	let settings: any = {};
+	let globalSettings: Settings = {};
 
 	return {
 		getId() {
 			return 'javascript';
 		},
 		configure(options: any) {
-			settings = options && options.javascript;
+			globalSettings = options;
 		},
 		doValidation(document: TextDocument): Diagnostic[] {
 			updateCurrentTextDocument(document);
-			const diagnostics = jsLanguageService.getSyntacticDiagnostics(FILE_NAME);
-			return diagnostics.map((diag): Diagnostic => {
+			const syntaxDiagnostics = jsLanguageService.getSyntacticDiagnostics(FILE_NAME);
+			const semanticDiagnostics = jsLanguageService.getSemanticDiagnostics(FILE_NAME);
+			return syntaxDiagnostics.concat(semanticDiagnostics).map((diag): Diagnostic => {
 				return {
 					range: convertRange(currentTextDocument, diag),
 					severity: DiagnosticSeverity.Error,
@@ -108,7 +110,7 @@ export function getJavascriptMode(documentRegions: LanguageModelCache<HTMLDocume
 		},
 		doResolve(document: TextDocument, item: CompletionItem): CompletionItem {
 			updateCurrentTextDocument(document);
-			let details = jsLanguageService.getCompletionEntryDetails(FILE_NAME, item.data.offset, item.label);
+			let details = jsLanguageService.getCompletionEntryDetails(FILE_NAME, item.data.offset, item.label, undefined, undefined);
 			if (details) {
 				item.detail = ts.displayPartsToString(details.displayParts);
 				item.documentation = ts.displayPartsToString(details.documentation);
@@ -240,10 +242,14 @@ export function getJavascriptMode(documentRegions: LanguageModelCache<HTMLDocume
 			}
 			return null;
 		},
-		format(document: TextDocument, range: Range, formatParams: FormattingOptions): TextEdit[] {
-			updateCurrentTextDocument(document);
+		format(document: TextDocument, range: Range, formatParams: FormattingOptions, settings: Settings = globalSettings): TextEdit[] {
+			currentTextDocument = documentRegions.get(document).getEmbeddedDocument('javascript', true);
+			scriptFileVersion++;
+
+			let formatterSettings = settings && settings.javascript && settings.javascript.format;
+
 			let initialIndentLevel = computeInitialIndent(document, range, formatParams);
-			let formatSettings = convertOptions(formatParams, settings && settings.format, initialIndentLevel + 1);
+			let formatSettings = convertOptions(formatParams, formatterSettings, initialIndentLevel + 1);
 			let start = currentTextDocument.offsetAt(range.start);
 			let end = currentTextDocument.offsetAt(range.end);
 			let lastLineRange = null;
@@ -363,6 +369,7 @@ function convertOptions(options: FormattingOptions, formatSettings: any, initial
 		InsertSpaceAfterFunctionKeywordForAnonymousFunctions: Boolean(!formatSettings || formatSettings.insertSpaceAfterFunctionKeywordForAnonymousFunctions),
 		InsertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis: Boolean(formatSettings && formatSettings.insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis),
 		InsertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets: Boolean(formatSettings && formatSettings.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets),
+		InsertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: Boolean(formatSettings && formatSettings.insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces),
 		InsertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces: Boolean(formatSettings && formatSettings.insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces),
 		PlaceOpenBraceOnNewLineForControlBlocks: Boolean(formatSettings && formatSettings.placeOpenBraceOnNewLineForFunctions),
 		PlaceOpenBraceOnNewLineForFunctions: Boolean(formatSettings && formatSettings.placeOpenBraceOnNewLineForControlBlocks)

@@ -8,22 +8,23 @@ import { Action } from 'vs/base/common/actions';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { SyncDescriptor0, createSyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
 import { IConstructorSignature2, createDecorator } from 'vs/platform/instantiation/common/instantiation';
-import { IKeybindings } from 'vs/platform/keybinding/common/keybinding';
+import { IKeybindings } from 'vs/platform/keybinding/common/keybindingsRegistry';
 import { ContextKeyExpr, IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
 import { ICommandService } from 'vs/platform/commands/common/commands';
 import { IDisposable } from 'vs/base/common/lifecycle';
 import Event from 'vs/base/common/event';
 
-export interface ICommandAction {
-	id: string;
-	title: string;
-	category?: string;
-	iconClass?: string;
+export interface ILocalizedString {
+	value: string;
+	original: string;
 }
 
-export interface IMenu extends IDisposable {
-	onDidChange: Event<IMenu>;
-	getActions(arg?: any): [string, MenuItemAction[]][];
+export interface ICommandAction {
+	id: string;
+	title: string | ILocalizedString;
+	category?: string | ILocalizedString;
+	iconClass?: string;
+	iconPath?: string;
 }
 
 export interface IMenuItem {
@@ -36,27 +37,39 @@ export interface IMenuItem {
 
 export class MenuId {
 
-	static readonly EditorTitle = new MenuId('1');
-	static readonly EditorTitleContext = new MenuId('2');
-	static readonly EditorContext = new MenuId('3');
-	static readonly ExplorerContext = new MenuId('4');
-	static readonly ProblemsPanelContext = new MenuId('5');
-	static readonly DebugVariablesContext = new MenuId('6');
-	static readonly DebugWatchContext = new MenuId('7');
-	static readonly DebugCallStackContext = new MenuId('8');
-	static readonly DebugBreakpointsContext = new MenuId('9');
-	static readonly DebugConsoleContext = new MenuId('10');
-	static readonly SCMTitle = new MenuId('11');
-	static readonly SCMResourceGroupContext = new MenuId('12');
-	static readonly SCMResourceContext = new MenuId('13');
+	private static ID = 1;
 
-	constructor(private _id: string) {
+	static readonly EditorTitle = new MenuId();
+	static readonly EditorTitleContext = new MenuId();
+	static readonly EditorContext = new MenuId();
+	static readonly ExplorerContext = new MenuId();
+	static readonly ProblemsPanelContext = new MenuId();
+	static readonly DebugVariablesContext = new MenuId();
+	static readonly DebugWatchContext = new MenuId();
+	static readonly DebugCallStackContext = new MenuId();
+	static readonly DebugBreakpointsContext = new MenuId();
+	static readonly DebugConsoleContext = new MenuId();
+	static readonly SCMTitle = new MenuId();
+	static readonly SCMSourceControl = new MenuId();
+	static readonly SCMResourceGroupContext = new MenuId();
+	static readonly SCMResourceContext = new MenuId();
+	static readonly SCMChangeContext = new MenuId();
+	static readonly CommandPalette = new MenuId();
+	static readonly ViewTitle = new MenuId();
+	static readonly ViewItemContext = new MenuId();
+	static readonly TouchBarContext = new MenuId();
 
-	}
+	readonly id: string = String(MenuId.ID++);
+}
 
-	get id(): string {
-		return this._id;
-	}
+export interface IMenuActionOptions {
+	arg?: any;
+	shouldForwardArgs?: boolean;
+}
+
+export interface IMenu extends IDisposable {
+	onDidChange: Event<IMenu>;
+	getActions(options?: IMenuActionOptions): [string, MenuItemAction[]][];
 }
 
 export const IMenuService = createDecorator<IMenuService>('menuService');
@@ -66,38 +79,35 @@ export interface IMenuService {
 	_serviceBrand: any;
 
 	createMenu(id: MenuId, scopedKeybindingService: IContextKeyService): IMenu;
-
-	getCommandActions(): ICommandAction[];
 }
 
 export interface IMenuRegistry {
-	commands: { [id: string]: ICommandAction };
 	addCommand(userCommand: ICommandAction): boolean;
 	getCommand(id: string): ICommandAction;
 	appendMenuItem(menu: MenuId, item: IMenuItem): IDisposable;
 	getMenuItems(loc: MenuId): IMenuItem[];
 }
 
-export const MenuRegistry: IMenuRegistry = new class {
+export const MenuRegistry: IMenuRegistry = new class implements IMenuRegistry {
 
-	commands: { [id: string]: ICommandAction } = Object.create(null);
+	private _commands: { [id: string]: ICommandAction } = Object.create(null);
 
-	menuItems: { [loc: string]: IMenuItem[] } = Object.create(null);
+	private _menuItems: { [loc: string]: IMenuItem[] } = Object.create(null);
 
 	addCommand(command: ICommandAction): boolean {
-		const old = this.commands[command.id];
-		this.commands[command.id] = command;
+		const old = this._commands[command.id];
+		this._commands[command.id] = command;
 		return old !== void 0;
 	}
 
 	getCommand(id: string): ICommandAction {
-		return this.commands[id];
+		return this._commands[id];
 	}
 
-	appendMenuItem({id}: MenuId, item: IMenuItem): IDisposable {
-		let array = this.menuItems[id];
+	appendMenuItem({ id }: MenuId, item: IMenuItem): IDisposable {
+		let array = this._menuItems[id];
 		if (!array) {
-			this.menuItems[id] = array = [item];
+			this._menuItems[id] = array = [item];
 		} else {
 			array.push(item);
 		}
@@ -111,8 +121,30 @@ export const MenuRegistry: IMenuRegistry = new class {
 		};
 	}
 
-	getMenuItems({id}: MenuId): IMenuItem[] {
-		return this.menuItems[id] || [];
+	getMenuItems({ id }: MenuId): IMenuItem[] {
+		const result = this._menuItems[id] || [];
+
+		if (id === MenuId.CommandPalette.id) {
+			// CommandPalette is special because it shows
+			// all commands by default
+			this._appendImplicitItems(result);
+		}
+		return result;
+	}
+
+	private _appendImplicitItems(result: IMenuItem[]) {
+		const set = new Set<string>();
+		for (const { command, alt } of result) {
+			set.add(command.id);
+			if (alt) {
+				set.add(alt.id);
+			}
+		}
+		for (let id in this._commands) {
+			if (!set.has(id)) {
+				result.push({ command: this._commands[id] });
+			}
+		}
 	}
 };
 
@@ -133,7 +165,7 @@ export class ExecuteCommandAction extends Action {
 
 export class MenuItemAction extends ExecuteCommandAction {
 
-	private _arg: any;
+	private _options: IMenuActionOptions;
 
 	readonly item: ICommandAction;
 	readonly alt: MenuItemAction;
@@ -141,20 +173,30 @@ export class MenuItemAction extends ExecuteCommandAction {
 	constructor(
 		item: ICommandAction,
 		alt: ICommandAction,
-		arg: any,
+		options: IMenuActionOptions,
 		@ICommandService commandService: ICommandService
 	) {
-		super(item.id, item.title, commandService);
+		typeof item.title === 'string' ? super(item.id, item.title, commandService) : super(item.id, item.title.value, commandService);
 		this._cssClass = item.iconClass;
 		this._enabled = true;
-		this._arg = arg;
+		this._options = options || {};
 
 		this.item = item;
-		this.alt = alt ? new MenuItemAction(alt, undefined, arg, commandService) : undefined;
+		this.alt = alt ? new MenuItemAction(alt, undefined, this._options, commandService) : undefined;
 	}
 
-	run(): TPromise<any> {
-		return super.run(this._arg);
+	run(...args: any[]): TPromise<any> {
+		let runArgs: any[] = [];
+
+		if (this._options.arg) {
+			runArgs = [...runArgs, this._options.arg];
+		}
+
+		if (this._options.shouldForwardArgs) {
+			runArgs = [...runArgs, ...args];
+		}
+
+		return super.run(...runArgs);
 	}
 }
 

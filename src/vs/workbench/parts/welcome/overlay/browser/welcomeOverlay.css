@@ -10,39 +10,29 @@
 	height: 100%;
 	width: 100%;
 	z-index: 9999;
-	background: rgba(0,0,0,0.52);
 	font-size: 10px;
 	transition: font-size .25s;
-}
-
-.vs .monaco-workbench > .welcomeOverlay {
-	background: rgba(255,255,255,.52);
 }
 
 #workbench\.parts\.editor {
 	transition: filter .25s, opacity .2s;
 }
 
-#workbench\.parts\.editor.blur-background {
-	filter: blur(3px);
-	opacity: .28;
+.monaco-workbench.blur-background #workbench\.parts\.panel,
+.monaco-workbench.blur-background #workbench\.parts\.sidebar,
+.monaco-workbench.blur-background #workbench\.parts\.editor {
+	filter: blur(2px);
+	opacity: .4;
 }
 
-.hc-black #workbench\.parts\.editor.blur-background {
+.hc-black .monaco-workbench.blur-background #workbench\.parts\.panel,
+.hc-black .monaco-workbench.blur-background #workbench\.parts\.sidebar,
+.hc-black .monaco-workbench.blur-background #workbench\.parts\.editor {
 	opacity: .2;
 }
 
 .monaco-workbench > .welcomeOverlay > .key {
 	font-size: 1.6em;
-}
-
-.monaco-workbench > .welcomeOverlay > .key {
-	color: #000;
-}
-
-.vs-dark .monaco-workbench > .welcomeOverlay > .key,
-.hc-black .monaco-workbench > .welcomeOverlay > .key {
-	color: #FFF;
 }
 
 .monaco-workbench > .welcomeOverlay > .key > .label {
@@ -52,7 +42,6 @@
 .monaco-workbench > .welcomeOverlay > .key > .shortcut {
 	letter-spacing: 0.15em;
 	font-size: 0.8125em;
-	color: #d7ba7d;
 	font-family: "Lucida Grande", sans-serif;
 }
 

@@ -12,19 +12,18 @@ import gracefulFs = require('graceful-fs');
 gracefulFs.gracefulify(fs);
 
 import arrays = require('vs/base/common/arrays');
-import { compareByScore } from 'vs/base/common/comparers';
 import objects = require('vs/base/common/objects');
-import scorer = require('vs/base/common/scorer');
 import strings = require('vs/base/common/strings');
 import { PPromise, TPromise } from 'vs/base/common/winjs.base';
-import { MAX_FILE_SIZE } from 'vs/platform/files/common/files';
 import { FileWalker, Engine as FileSearchEngine } from 'vs/workbench/services/search/node/fileSearch';
+import { MAX_FILE_SIZE } from 'vs/platform/files/common/files';
+import { RipgrepEngine } from 'vs/workbench/services/search/node/ripgrepTextSearch';
 import { Engine as TextSearchEngine } from 'vs/workbench/services/search/node/textSearch';
 import { TextSearchWorkerProvider } from 'vs/workbench/services/search/node/textSearchWorkerProvider';
-import { IRawSearchService, IRawSearch, IRawFileMatch, ISerializedFileMatch, ISerializedSearchProgressItem, ISerializedSearchComplete, ISearchEngine } from './search';
+import { IRawSearchService, IRawSearch, IRawFileMatch, ISerializedFileMatch, ISerializedSearchProgressItem, ISerializedSearchComplete, ISearchEngine, IFileSearchProgressItem, ITelemetryEvent } from './search';
 import { ICachedSearchStats, IProgress } from 'vs/platform/search/common/search';
-
-export type IRawProgressItem<T> = T | T[] | IProgress;
+import { fuzzyContains } from 'vs/base/common/strings';
+import { compareItemsByScore, IItemAccessor, ScorerCache, prepareQuery } from 'vs/base/parts/quickopen/common/quickOpenScorer';
 
 export class SearchService implements IRawSearchService {
 
@@ -34,11 +33,44 @@ export class SearchService implements IRawSearchService {
 
 	private textSearchWorkerProvider: TextSearchWorkerProvider;
 
+	private telemetryPipe: (event: ITelemetryEvent) => void;
+
 	public fileSearch(config: IRawSearch): PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem> {
 		return this.doFileSearch(FileSearchEngine, config, SearchService.BATCH_SIZE);
 	}
 
 	public textSearch(config: IRawSearch): PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem> {
+		return config.useRipgrep ?
+			this.ripgrepTextSearch(config) :
+			this.legacyTextSearch(config);
+	}
+
+	public ripgrepTextSearch(config: IRawSearch): PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem> {
+		config.maxFilesize = MAX_FILE_SIZE;
+		let engine = new RipgrepEngine(config);
+
+		return new PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem>((c, e, p) => {
+			// Use BatchedCollector to get new results to the frontend every 2s at least, until 50 results have been returned
+			const collector = new BatchedCollector<ISerializedFileMatch>(SearchService.BATCH_SIZE, p);
+			engine.search((match) => {
+				collector.addItem(match, match.numMatches);
+			}, (message) => {
+				p(message);
+			}, (error, stats) => {
+				collector.flush();
+
+				if (error) {
+					e(error);
+				} else {
+					c(stats);
+				}
+			});
+		}, () => {
+			engine.cancel();
+		});
+	}
+
+	public legacyTextSearch(config: IRawSearch): PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem> {
 		if (!this.textSearchWorkerProvider) {
 			this.textSearchWorkerProvider = new TextSearchWorkerProvider();
 		}
@@ -46,11 +78,12 @@ export class SearchService implements IRawSearchService {
 		let engine = new TextSearchEngine(
 			config,
 			new FileWalker({
-				rootFolders: config.rootFolders,
+				folderQueries: config.folderQueries,
 				extraFiles: config.extraFiles,
 				includePattern: config.includePattern,
 				excludePattern: config.excludePattern,
 				filePattern: config.filePattern,
+				useRipgrep: false,
 				maxFilesize: MAX_FILE_SIZE
 			}),
 			this.textSearchWorkerProvider);
@@ -58,7 +91,7 @@ export class SearchService implements IRawSearchService {
 		return this.doTextSearch(engine, SearchService.BATCH_SIZE);
 	}
 
-	public doFileSearch(EngineClass: { new (config: IRawSearch): ISearchEngine<IRawFileMatch>; }, config: IRawSearch, batchSize?: number): PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem> {
+	public doFileSearch(EngineClass: { new(config: IRawSearch): ISearchEngine<IRawFileMatch>; }, config: IRawSearch, batchSize?: number): PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem> {
 
 		if (config.sortByScore) {
 			let sortedSearch = this.trySortedSearchFromCache(config);
@@ -81,7 +114,7 @@ export class SearchService implements IRawSearchService {
 			});
 		}
 
-		let searchPromise: PPromise<void, IRawProgressItem<IRawFileMatch>>;
+		let searchPromise: PPromise<void, IFileSearchProgressItem>;
 		return new PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem>((c, e, p) => {
 			const engine = new EngineClass(config);
 			searchPromise = this.doSearch(engine, batchSize)
@@ -91,7 +124,7 @@ export class SearchService implements IRawSearchService {
 					} else if ((<IRawFileMatch>progress).relativePath) {
 						p(this.rawMatchToSearchItem(<IRawFileMatch>progress));
 					} else {
-						p(progress);
+						p(<IProgress>progress);
 					}
 				});
 		}, () => {
@@ -104,12 +137,18 @@ export class SearchService implements IRawSearchService {
 	}
 
 	private doSortedSearch(engine: ISearchEngine<IRawFileMatch>, config: IRawSearch): PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IProgress> {
-		let searchPromise: PPromise<void, IRawProgressItem<IRawFileMatch>>;
-		let allResultsPromise = new PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IProgress>((c, e, p) => {
+		let searchPromise: PPromise<void, IFileSearchProgressItem>;
+		let allResultsPromise = new PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IFileSearchProgressItem>((c, e, p) => {
 			let results: IRawFileMatch[] = [];
 			searchPromise = this.doSearch(engine, -1)
 				.then(result => {
 					c([result, results]);
+					if (this.telemetryPipe) {
+						this.telemetryPipe({
+							eventName: 'fileSearch',
+							data: result.stats
+						});
+					}
 				}, e, progress => {
 					if (Array.isArray(progress)) {
 						results = progress;
@@ -131,23 +170,26 @@ export class SearchService implements IRawSearchService {
 			allResultsPromise = this.preventCancellation(allResultsPromise);
 		}
 
+		let chained: TPromise<void>;
 		return new PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IProgress>((c, e, p) => {
-			allResultsPromise.then(([result, results]) => {
+			chained = allResultsPromise.then(([result, results]) => {
 				const scorerCache: ScorerCache = cache ? cache.scorerCache : Object.create(null);
 				const unsortedResultTime = Date.now();
-				const sortedResults = this.sortResults(config, results, scorerCache);
-				const sortedResultTime = Date.now();
+				return this.sortResults(config, results, scorerCache)
+					.then(sortedResults => {
+						const sortedResultTime = Date.now();
 
-				c([{
-					stats: objects.assign({}, result.stats, {
-						unsortedResultTime,
-						sortedResultTime
-					}),
-					limitHit: result.limitHit || typeof config.maxResults === 'number' && results.length > config.maxResults
-				}, sortedResults]);
+						c([{
+							stats: objects.assign({}, result.stats, {
+								unsortedResultTime,
+								sortedResultTime
+							}),
+							limitHit: result.limitHit || typeof config.maxResults === 'number' && results.length > config.maxResults
+						}, sortedResults]);
+					});
 			}, e, p);
 		}, () => {
-			allResultsPromise.cancel();
+			chained.cancel();
 		});
 	}
 
@@ -168,47 +210,54 @@ export class SearchService implements IRawSearchService {
 		const cacheLookupStartTime = Date.now();
 		const cached = this.getResultsFromCache(cache, config.filePattern);
 		if (cached) {
+			let chained: TPromise<void>;
 			return new PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IProgress>((c, e, p) => {
-				cached.then(([result, results, cacheStats]) => {
+				chained = cached.then(([result, results, cacheStats]) => {
 					const cacheLookupResultTime = Date.now();
-					const sortedResults = this.sortResults(config, results, cache.scorerCache);
-					const sortedResultTime = Date.now();
+					return this.sortResults(config, results, cache.scorerCache)
+						.then(sortedResults => {
+							const sortedResultTime = Date.now();
 
-					const stats: ICachedSearchStats = {
-						fromCache: true,
-						cacheLookupStartTime: cacheLookupStartTime,
-						cacheFilterStartTime: cacheStats.cacheFilterStartTime,
-						cacheLookupResultTime: cacheLookupResultTime,
-						cacheEntryCount: cacheStats.cacheFilterResultCount,
-						resultCount: results.length
-					};
-					if (config.sortByScore) {
-						stats.unsortedResultTime = cacheLookupResultTime;
-						stats.sortedResultTime = sortedResultTime;
-					}
-					if (!cacheStats.cacheWasResolved) {
-						stats.joined = result.stats;
-					}
-					c([
-						{
-							limitHit: result.limitHit || typeof config.maxResults === 'number' && results.length > config.maxResults,
-							stats: stats
-						},
-						sortedResults
-					]);
+							const stats: ICachedSearchStats = {
+								fromCache: true,
+								cacheLookupStartTime: cacheLookupStartTime,
+								cacheFilterStartTime: cacheStats.cacheFilterStartTime,
+								cacheLookupResultTime: cacheLookupResultTime,
+								cacheEntryCount: cacheStats.cacheFilterResultCount,
+								resultCount: results.length
+							};
+							if (config.sortByScore) {
+								stats.unsortedResultTime = cacheLookupResultTime;
+								stats.sortedResultTime = sortedResultTime;
+							}
+							if (!cacheStats.cacheWasResolved) {
+								stats.joined = result.stats;
+							}
+							c([
+								{
+									limitHit: result.limitHit || typeof config.maxResults === 'number' && results.length > config.maxResults,
+									stats: stats
+								},
+								sortedResults
+							]);
+						});
 				}, e, p);
 			}, () => {
-				cached.cancel();
+				chained.cancel();
 			});
 		}
 		return undefined;
 	}
 
-	private sortResults(config: IRawSearch, results: IRawFileMatch[], scorerCache: ScorerCache): IRawFileMatch[] {
-		const filePattern = config.filePattern;
-		const normalizedSearchValue = strings.stripWildcards(filePattern).toLowerCase();
-		const compare = (elementA: IRawFileMatch, elementB: IRawFileMatch) => compareByScore(elementA, elementB, FileMatchAccessor, filePattern, normalizedSearchValue, scorerCache);
-		return arrays.top(results, compare, config.maxResults);
+	private sortResults(config: IRawSearch, results: IRawFileMatch[], scorerCache: ScorerCache): TPromise<IRawFileMatch[]> {
+		// we use the same compare function that is used later when showing the results using fuzzy scoring
+		// this is very important because we are also limiting the number of results by config.maxResults
+		// and as such we want the top items to be included in this result set if the number of items
+		// exceeds config.maxResults.
+		const query = prepareQuery(config.filePattern);
+		const compare = (matchA: IRawFileMatch, matchB: IRawFileMatch) => compareItemsByScore(matchA, matchB, query, true, FileMatchItemAccessor, scorerCache);
+
+		return arrays.topAsync(results, compare, config.maxResults, 10000);
 	}
 
 	private sendProgress(results: ISerializedFileMatch[], progressCb: (batch: ISerializedFileMatch[]) => void, batchSize: number) {
@@ -228,7 +277,7 @@ export class SearchService implements IRawSearchService {
 
 		// Find cache entries by prefix of search value
 		const hasPathSep = searchValue.indexOf(sep) >= 0;
-		let cached: PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IProgress>;
+		let cached: PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IFileSearchProgressItem>;
 		let wasResolved: boolean;
 		for (let previousSearch in cache.resultsToSearchCache) {
 
@@ -261,7 +310,7 @@ export class SearchService implements IRawSearchService {
 					let entry = cachedEntries[i];
 
 					// Check if this entry is a match for the search value
-					if (!scorer.matches(entry.relativePath, normalizedSearchValueLowercase)) {
+					if (!fuzzyContains(entry.relativePath, normalizedSearchValueLowercase)) {
 						continue;
 					}
 
@@ -279,8 +328,8 @@ export class SearchService implements IRawSearchService {
 		});
 	}
 
-	private doTextSearch(engine: TextSearchEngine, batchSize: number): PPromise<ISerializedSearchComplete, IRawProgressItem<ISerializedFileMatch>> {
-		return new PPromise<ISerializedSearchComplete, IRawProgressItem<ISerializedFileMatch>>((c, e, p) => {
+	private doTextSearch(engine: TextSearchEngine, batchSize: number): PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem> {
+		return new PPromise<ISerializedSearchComplete, ISerializedSearchProgressItem>((c, e, p) => {
 			// Use BatchedCollector to get new results to the frontend every 2s at least, until 50 results have been returned
 			const collector = new BatchedCollector<ISerializedFileMatch>(batchSize, p);
 			engine.search((matches) => {
@@ -302,9 +351,9 @@ export class SearchService implements IRawSearchService {
 		});
 	}
 
-	private doSearch<T>(engine: ISearchEngine<T>, batchSize?: number): PPromise<ISerializedSearchComplete, IRawProgressItem<T>> {
-		return new PPromise<ISerializedSearchComplete, IRawProgressItem<T>>((c, e, p) => {
-			let batch: T[] = [];
+	private doSearch(engine: ISearchEngine<IRawFileMatch>, batchSize?: number): PPromise<ISerializedSearchComplete, IFileSearchProgressItem> {
+		return new PPromise<ISerializedSearchComplete, IFileSearchProgressItem>((c, e, p) => {
+			let batch: IRawFileMatch[] = [];
 			engine.search((match) => {
 				if (match) {
 					if (batchSize) {
@@ -339,6 +388,14 @@ export class SearchService implements IRawSearchService {
 		return TPromise.as(undefined);
 	}
 
+	public fetchTelemetry(): PPromise<void, ITelemetryEvent> {
+		return new PPromise((c, e, p) => {
+			this.telemetryPipe = p;
+		}, () => {
+			this.telemetryPipe = null;
+		});
+	}
+
 	private preventCancellation<C, P>(promise: PPromise<C, P>): PPromise<C, P> {
 		return new PPromise<C, P>((c, e, p) => {
 			// Allow for piled up cancellations to come through first.
@@ -353,25 +410,25 @@ export class SearchService implements IRawSearchService {
 
 class Cache {
 
-	public resultsToSearchCache: { [searchValue: string]: PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IProgress>; } = Object.create(null);
+	public resultsToSearchCache: { [searchValue: string]: PPromise<[ISerializedSearchComplete, IRawFileMatch[]], IFileSearchProgressItem>; } = Object.create(null);
 
 	public scorerCache: ScorerCache = Object.create(null);
 }
 
-interface ScorerCache {
-	[key: string]: number;
-}
+const FileMatchItemAccessor = new class implements IItemAccessor<IRawFileMatch> {
 
-class FileMatchAccessor {
-
-	public static getLabel(match: IRawFileMatch): string {
-		return match.basename;
+	public getItemLabel(match: IRawFileMatch): string {
+		return match.basename; // e.g. myFile.txt
 	}
 
-	public static getResourcePath(match: IRawFileMatch): string {
-		return match.relativePath;
+	public getItemDescription(match: IRawFileMatch): string {
+		return match.relativePath.substr(0, match.relativePath.length - match.basename.length - 1); // e.g. some/path/to/file
 	}
-}
+
+	public getItemPath(match: IRawFileMatch): string {
+		return match.relativePath; // e.g. some/path/to/file/myFile.txt
+	}
+};
 
 interface CacheStats {
 	cacheWasResolved: boolean;
@@ -399,6 +456,18 @@ class BatchedCollector<T> {
 	constructor(private maxBatchSize: number, private cb: (items: T | T[]) => void) {
 	}
 
+	addItem(item: T, size: number): void {
+		if (!item) {
+			return;
+		}
+
+		if (this.maxBatchSize > 0) {
+			this.addItemToBatch(item, size);
+		} else {
+			this.cb(item);
+		}
+	}
+
 	addItems(items: T[], size: number): void {
 		if (!items) {
 			return;
@@ -411,9 +480,19 @@ class BatchedCollector<T> {
 		}
 	}
 
-	private addItemsToBatch(items: T[], size: number): void {
-		this.batch = this.batch.concat(items);
+	private addItemToBatch(item: T, size: number): void {
+		this.batch.push(item);
 		this.batchSize += size;
+		this.onUpdate();
+	}
+
+	private addItemsToBatch(item: T[], size: number): void {
+		this.batch = this.batch.concat(item);
+		this.batchSize += size;
+		this.onUpdate();
+	}
+
+	private onUpdate(): void {
 		if (this.totalNumberCompleted < BatchedCollector.START_BATCH_AFTER_COUNT) {
 			// Flush because we aren't batching yet
 			this.flush();

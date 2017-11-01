@@ -4,7 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 'use strict';
 
-import { IEditorWhitespace } from 'vs/editor/common/editorCommon';
+export interface IEditorWhitespace {
+	readonly id: number;
+	readonly afterLineNumber: number;
+	readonly heightInLines: number;
+}
 
 /**
  * Represent whitespaces in between lines and provide fast CRUD management methods.
@@ -259,7 +263,7 @@ export class WhitespaceComputer {
 	 * @param fromLineNumber The line number at which the deletion started, inclusive
 	 * @param toLineNumber The line number at which the deletion ended, inclusive
 	 */
-	public onModelLinesDeleted(fromLineNumber: number, toLineNumber: number): void {
+	public onLinesDeleted(fromLineNumber: number, toLineNumber: number): void {
 		fromLineNumber = fromLineNumber | 0;
 		toLineNumber = toLineNumber | 0;
 
@@ -285,7 +289,7 @@ export class WhitespaceComputer {
 	 * @param fromLineNumber The line number at which the insertion started, inclusive
 	 * @param toLineNumber The line number at which the insertion ended, inclusive.
 	 */
-	public onModelLinesInserted(fromLineNumber: number, toLineNumber: number): void {
+	public onLinesInserted(fromLineNumber: number, toLineNumber: number): void {
 		fromLineNumber = fromLineNumber | 0;
 		toLineNumber = toLineNumber | 0;
 

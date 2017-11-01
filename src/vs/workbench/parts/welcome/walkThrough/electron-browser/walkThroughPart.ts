@@ -11,15 +11,12 @@ import { ScrollbarVisibility } from 'vs/base/common/scrollable';
 import * as strings from 'vs/base/common/strings';
 import URI from 'vs/base/common/uri';
 import { TPromise } from 'vs/base/common/winjs.base';
-import { DefaultConfig } from 'vs/editor/common/config/defaultConfig';
-import { IEditorOptions, IEditorViewState } from 'vs/editor/common/editorCommon';
 import { $, Dimension, Builder } from 'vs/base/browser/builder';
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { EditorOptions } from 'vs/workbench/common/editor';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { WalkThroughInput } from 'vs/workbench/parts/welcome/walkThrough/node/walkThroughInput';
-import { IThemeService } from 'vs/workbench/services/themes/common/themeService';
 import { IOpenerService } from 'vs/platform/opener/common/opener';
 import { marked } from 'vs/base/common/marked/marked';
 import { IModeService } from 'vs/editor/common/services/modeService';
@@ -34,8 +31,17 @@ import { Scope } from 'vs/workbench/common/memento';
 import { RawContextKey, IContextKey, IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { once } from 'vs/base/common/event';
-import SCMPreview from 'vs/workbench/parts/scm/browser/scmPreview';
 import { isObject } from 'vs/base/common/types';
+import { ICommandService, CommandsRegistry } from 'vs/platform/commands/common/commands';
+import { ICodeEditorService } from 'vs/editor/common/services/codeEditorService';
+import { IPartService } from 'vs/workbench/services/part/common/partService';
+import { IEditorOptions } from 'vs/editor/common/config/editorOptions';
+import { IMessageService, Severity } from 'vs/platform/message/common/message';
+import { IThemeService, registerThemingParticipant } from 'vs/platform/theme/common/themeService';
+import { registerColor, focusBorder, textLinkForeground, textLinkActiveForeground, textPreformatForeground, contrastBorder, textBlockQuoteBackground, textBlockQuoteBorder } from 'vs/platform/theme/common/colorRegistry';
+import { getExtraColor } from 'vs/workbench/parts/welcome/walkThrough/node/walkThroughUtils';
+import { UILabelProvider } from 'vs/base/common/keybindingLabels';
+import { OS, OperatingSystem } from 'vs/base/common/platform';
 
 export const WALK_THROUGH_FOCUS = new RawContextKey<boolean>('interactivePlaygroundFocus', false);
 
@@ -47,7 +53,7 @@ interface IViewState {
 	scrollLeft: number;
 }
 
-interface IWalkThroughEditorViewState extends IEditorViewState {
+interface IWalkThroughEditorViewState {
 	viewState: IViewState;
 }
 
@@ -55,6 +61,26 @@ interface IWalkThroughEditorViewStates {
 	0?: IWalkThroughEditorViewState;
 	1?: IWalkThroughEditorViewState;
 	2?: IWalkThroughEditorViewState;
+}
+
+class WalkThroughCodeEditor extends CodeEditor {
+
+	constructor(
+		domElement: HTMLElement,
+		options: IEditorOptions,
+		private telemetryData: Object,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@ICodeEditorService codeEditorService: ICodeEditorService,
+		@ICommandService commandService: ICommandService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@IThemeService themeService: IThemeService
+	) {
+		super(domElement, options, instantiationService, codeEditorService, commandService, contextKeyService, themeService);
+	}
+
+	getTelemetryData() {
+		return this.telemetryData;
+	}
 }
 
 export class WalkThroughPart extends BaseEditor {
@@ -71,7 +97,7 @@ export class WalkThroughPart extends BaseEditor {
 	constructor(
 		@ITelemetryService telemetryService: ITelemetryService,
 		@IInstantiationService private instantiationService: IInstantiationService,
-		@IThemeService private themeService: IThemeService,
+		@IThemeService protected themeService: IThemeService,
 		@IOpenerService private openerService: IOpenerService,
 		@IFileService private fileService: IFileService,
 		@IModelService protected modelService: IModelService,
@@ -79,9 +105,11 @@ export class WalkThroughPart extends BaseEditor {
 		@IStorageService private storageService: IStorageService,
 		@IContextKeyService private contextKeyService: IContextKeyService,
 		@IConfigurationService private configurationService: IConfigurationService,
-		@IModeService private modeService: IModeService
+		@IModeService private modeService: IModeService,
+		@IMessageService private messageService: IMessageService,
+		@IPartService private partService: IPartService
 	) {
-		super(WalkThroughPart.ID, telemetryService);
+		super(WalkThroughPart.ID, telemetryService, themeService);
 		this.editorFocus = WALK_THROUGH_FOCUS.bindTo(this.contextKeyService);
 	}
 
@@ -93,7 +121,6 @@ export class WalkThroughPart extends BaseEditor {
 		this.content.style.outlineStyle = 'none';
 
 		this.scrollbar = new DomScrollableElement(this.content, {
-			canUseTranslate3d: false,
 			horizontal: ScrollbarVisibility.Auto,
 			vertical: ScrollbarVisibility.Auto
 		});
@@ -107,11 +134,12 @@ export class WalkThroughPart extends BaseEditor {
 	}
 
 	private updatedScrollPosition() {
-		const scrollState = this.scrollbar.getScrollState();
-		const scrollHeight = scrollState.scrollHeight;
+		const scrollDimensions = this.scrollbar.getScrollDimensions();
+		const scrollPosition = this.scrollbar.getScrollPosition();
+		const scrollHeight = scrollDimensions.scrollHeight;
 		if (scrollHeight && this.input instanceof WalkThroughInput) {
-			const scrollTop = scrollState.scrollTop;
-			const height = scrollState.height;
+			const scrollTop = scrollPosition.scrollTop;
+			const height = scrollDimensions.height;
 			this.input.relativeScrollPosition(scrollTop / scrollHeight, (scrollTop + height) / scrollHeight);
 		}
 	}
@@ -136,9 +164,9 @@ export class WalkThroughPart extends BaseEditor {
 		this.disposables.push(this.addEventListener(this.content, 'focusin', e => {
 			// Work around scrolling as side-effect of setting focus on the offscreen zone widget (#18929)
 			if (e.target instanceof HTMLElement && e.target.classList.contains('zone-widget-container')) {
-				let scrollState = this.scrollbar.getScrollState();
-				this.content.scrollTop = scrollState.scrollTop;
-				this.content.scrollLeft = scrollState.scrollLeft;
+				const scrollPosition = this.scrollbar.getScrollPosition();
+				this.content.scrollTop = scrollPosition.scrollTop;
+				this.content.scrollLeft = scrollPosition.scrollLeft;
 			}
 		}));
 	}
@@ -150,6 +178,13 @@ export class WalkThroughPart extends BaseEditor {
 					let baseElement = window.document.getElementsByTagName('base')[0] || window.location;
 					if (baseElement && node.href.indexOf(baseElement.href) >= 0 && node.hash) {
 						let scrollTarget = this.content.querySelector(node.hash);
+						/* __GDPR__
+							"revealInDocument" : {
+								"hash" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"broken": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth" },
+								"from": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+							}
+						*/
 						this.telemetryService.publicLog('revealInDocument', {
 							hash: node.hash,
 							broken: !scrollTarget,
@@ -159,7 +194,7 @@ export class WalkThroughPart extends BaseEditor {
 						if (scrollTarget && innerContent) {
 							const targetTop = scrollTarget.getBoundingClientRect().top - 20;
 							const containerTop = innerContent.getBoundingClientRect().top;
-							this.scrollbar.updateState({ scrollTop: targetTop - containerTop });
+							this.scrollbar.setScrollPosition({ scrollTop: targetTop - containerTop });
 						}
 					} else {
 						this.open(URI.parse(node.href));
@@ -181,10 +216,20 @@ export class WalkThroughPart extends BaseEditor {
 
 	private open(uri: URI) {
 		if (uri.scheme === 'http' || uri.scheme === 'https') {
+			/* __GDPR__
+				"openExternal" : {
+					"uri" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+					"from": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+				}
+			*/
 			this.telemetryService.publicLog('openExternal', {
 				uri: uri.toString(true),
 				from: this.input instanceof WalkThroughInput ? this.input.getTelemetryFrom() : undefined
 			});
+		}
+		if (uri.scheme === 'command' && uri.path === 'git.clone' && !CommandsRegistry.getCommand('git.clone')) {
+			this.messageService.show(Severity.Info, localize('walkThrough.gitNotFound', "It looks like Git is not installed on your system."));
+			return;
 		}
 		this.openerService.open(this.addFrom(uri));
 	}
@@ -230,17 +275,17 @@ export class WalkThroughPart extends BaseEditor {
 	}
 
 	arrowUp() {
-		const scrollState = this.scrollbar.getScrollState();
-		this.scrollbar.updateState({ scrollTop: scrollState.scrollTop - this.getArrowScrollHeight() });
+		const scrollPosition = this.scrollbar.getScrollPosition();
+		this.scrollbar.setScrollPosition({ scrollTop: scrollPosition.scrollTop - this.getArrowScrollHeight() });
 	}
 
 	arrowDown() {
-		const scrollState = this.scrollbar.getScrollState();
-		this.scrollbar.updateState({ scrollTop: scrollState.scrollTop + this.getArrowScrollHeight() });
+		const scrollPosition = this.scrollbar.getScrollPosition();
+		this.scrollbar.setScrollPosition({ scrollTop: scrollPosition.scrollTop + this.getArrowScrollHeight() });
 	}
 
 	private getArrowScrollHeight() {
-		let fontSize = this.configurationService.lookup<number>('editor.fontSize').value;
+		let fontSize = this.configurationService.getValue<number>('editor.fontSize');
 		if (typeof fontSize !== 'number' || fontSize < 1) {
 			fontSize = 12;
 		}
@@ -248,13 +293,15 @@ export class WalkThroughPart extends BaseEditor {
 	}
 
 	pageUp() {
-		const scrollState = this.scrollbar.getScrollState();
-		this.scrollbar.updateState({ scrollTop: scrollState.scrollTop - scrollState.height });
+		const scrollDimensions = this.scrollbar.getScrollDimensions();
+		const scrollPosition = this.scrollbar.getScrollPosition();
+		this.scrollbar.setScrollPosition({ scrollTop: scrollPosition.scrollTop - scrollDimensions.height });
 	}
 
 	pageDown() {
-		const scrollState = this.scrollbar.getScrollState();
-		this.scrollbar.updateState({ scrollTop: scrollState.scrollTop + scrollState.height });
+		const scrollDimensions = this.scrollbar.getScrollDimensions();
+		const scrollPosition = this.scrollbar.getScrollPosition();
+		this.scrollbar.setScrollPosition({ scrollTop: scrollPosition.scrollTop + scrollDimensions.height });
 	}
 
 	setInput(input: WalkThroughInput, options: EditorOptions): TPromise<void> {
@@ -275,11 +322,11 @@ export class WalkThroughPart extends BaseEditor {
 			})
 			.then(model => {
 				const content = model.main.textEditorModel.getLinesContent().join('\n');
-				if (strings.endsWith(input.getResource().path, '.html')) {
+				if (!strings.endsWith(input.getResource().path, '.md')) {
 					this.content.innerHTML = content;
 					this.updateSizeClasses();
-					this.updateMarkerClasses();
 					this.decorateContent();
+					this.contentDisposables.push(this.keybindingService.onDidUpdateKeybindings(() => this.decorateContent()));
 					if (input.onReady) {
 						input.onReady(this.content.firstElementChild as HTMLElement);
 					}
@@ -299,8 +346,6 @@ export class WalkThroughPart extends BaseEditor {
 				innerContent.classList.add('walkThroughContent'); // only for markdown files
 				const markdown = this.expandMacros(content);
 				innerContent.innerHTML = marked(markdown, { renderer });
-				this.style(innerContent);
-				this.contentDisposables.push(this.themeService.onDidColorThemeChange(() => this.style(innerContent)));
 				this.content.appendChild(innerContent);
 
 				model.snippets.forEach((snippet, i) => {
@@ -308,7 +353,18 @@ export class WalkThroughPart extends BaseEditor {
 					const id = `snippet-${model.uri.fragment}`;
 					const div = innerContent.querySelector(`#${id.replace(/\./g, '\\.')}`) as HTMLElement;
 
-					const editor = this.instantiationService.createInstance(CodeEditor, div, this.getEditorOptions(snippet.textEditorModel.getModeId()));
+					const options = this.getEditorOptions(snippet.textEditorModel.getModeId());
+					/* __GDPR__FRAGMENT__
+						"EditorTelemetryData" : {
+							"target" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+							"snippet": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+						}
+					*/
+					const telemetryData = {
+						target: this.input instanceof WalkThroughInput ? this.input.getTelemetryFrom() : undefined,
+						snippet: i
+					};
+					const editor = this.instantiationService.createInstance(WalkThroughCodeEditor, div, options, telemetryData);
 					editor.setModel(model);
 					this.contentDisposables.push(editor);
 
@@ -333,21 +389,32 @@ export class WalkThroughPart extends BaseEditor {
 							const lineHeight = editor.getConfiguration().lineHeight;
 							const lineTop = (targetTop + (e.position.lineNumber - 1) * lineHeight) - containerTop;
 							const lineBottom = lineTop + lineHeight;
-							const scrollState = this.scrollbar.getScrollState();
-							const scrollTop = scrollState.scrollTop;
-							const height = scrollState.height;
+							const scrollDimensions = this.scrollbar.getScrollDimensions();
+							const scrollPosition = this.scrollbar.getScrollPosition();
+							const scrollTop = scrollPosition.scrollTop;
+							const height = scrollDimensions.height;
 							if (scrollTop > lineTop) {
-								this.scrollbar.updateState({ scrollTop: lineTop });
+								this.scrollbar.setScrollPosition({ scrollTop: lineTop });
 							} else if (scrollTop < lineBottom - height) {
-								this.scrollbar.updateState({ scrollTop: lineBottom - height });
+								this.scrollbar.setScrollPosition({ scrollTop: lineBottom - height });
 							}
 						}
 					}));
 
-					this.contentDisposables.push(this.themeService.onDidColorThemeChange(theme => editor.updateOptions({ theme: theme.id })));
-					this.contentDisposables.push(this.configurationService.onDidUpdateConfiguration(() => editor.updateOptions(this.getEditorOptions(snippet.textEditorModel.getModeId()))));
+					this.contentDisposables.push(this.configurationService.onDidChangeConfiguration(() => {
+						if (snippet.textEditorModel) {
+							editor.updateOptions(this.getEditorOptions(snippet.textEditorModel.getModeId()));
+						}
+					}));
 
 					this.contentDisposables.push(once(editor.onMouseDown)(() => {
+						/* __GDPR__
+							"walkThroughSnippetInteraction" : {
+								"from" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"type": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"snippet": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+							}
+						*/
 						this.telemetryService.publicLog('walkThroughSnippetInteraction', {
 							from: this.input instanceof WalkThroughInput ? this.input.getTelemetryFrom() : undefined,
 							type: 'mouseDown',
@@ -355,6 +422,13 @@ export class WalkThroughPart extends BaseEditor {
 						});
 					}));
 					this.contentDisposables.push(once(editor.onKeyDown)(() => {
+						/* __GDPR__
+							"walkThroughSnippetInteraction" : {
+								"from" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"type": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"snippet": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+							}
+						*/
 						this.telemetryService.publicLog('walkThroughSnippetInteraction', {
 							from: this.input instanceof WalkThroughInput ? this.input.getTelemetryFrom() : undefined,
 							type: 'keyDown',
@@ -362,6 +436,13 @@ export class WalkThroughPart extends BaseEditor {
 						});
 					}));
 					this.contentDisposables.push(once(editor.onDidChangeModelContent)(() => {
+						/* __GDPR__
+							"walkThroughSnippetInteraction" : {
+								"from" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"type": { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+								"snippet": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+							}
+						*/
 						this.telemetryService.publicLog('walkThroughSnippetInteraction', {
 							from: this.input instanceof WalkThroughInput ? this.input.getTelemetryFrom() : undefined,
 							type: 'changeModelContent',
@@ -370,7 +451,12 @@ export class WalkThroughPart extends BaseEditor {
 					}));
 				});
 				this.updateSizeClasses();
-				this.updateMarkerClasses();
+				this.multiCursorModifier();
+				this.contentDisposables.push(this.configurationService.onDidChangeConfiguration(e => {
+					if (e.affectsConfiguration('editor.multiCursorModifier')) {
+						this.multiCursorModifier();
+					}
+				}));
 				if (input.onReady) {
 					input.onReady(innerContent);
 				}
@@ -381,40 +467,29 @@ export class WalkThroughPart extends BaseEditor {
 	}
 
 	private getEditorOptions(language: string): IEditorOptions {
-		const config = this.configurationService.getConfiguration<IEditorOptions>({ overrideIdentifier: language, section: 'editor' });
+		const config = this.configurationService.getConfiguration<IEditorOptions>('editor', { overrideIdentifier: language });
 		return {
 			...isObject(config) ? config : Object.create(null),
 			scrollBeyondLastLine: false,
-			scrollbar: DefaultConfig.editor.scrollbar,
+			scrollbar: {
+				verticalScrollbarSize: 14,
+				horizontal: 'auto',
+				useShadows: true,
+				verticalHasArrows: false,
+				horizontalHasArrows: false
+			},
 			overviewRulerLanes: 3,
 			fixedOverflowWidgets: true,
 			lineNumbersMinChars: 1,
-			theme: this.themeService.getColorTheme().id,
+			minimap: { enabled: false },
 		};
-	}
-
-	private updateMarkerClasses() {
-		const innerContent = this.content.firstElementChild;
-		if (SCMPreview.enabled && innerContent) {
-			innerContent.classList.add('scmEnabled');
-		}
-	}
-
-	private style(div: HTMLElement) {
-		const styleElement = document.querySelector('.monaco-editor-background');
-		const {color, backgroundColor, fontFamily, fontWeight, fontSize} = window.getComputedStyle(styleElement);
-		div.style.color = color;
-		div.style.backgroundColor = backgroundColor;
-		div.style.fontFamily = fontFamily;
-		div.style.fontWeight = fontWeight;
-		div.style.fontSize = fontSize;
 	}
 
 	private expandMacros(input: string) {
 		return input.replace(/kb\(([a-z.\d\-]+)\)/gi, (match: string, kb: string) => {
-			const [keybinding] = this.keybindingService.lookupKeybindings(kb);
-			const shortcut = keybinding ? this.keybindingService.getLabelFor(keybinding) : UNBOUND_COMMAND;
-			return `<span class="shortcut">${shortcut}</span>`;
+			const keybinding = this.keybindingService.lookupKeybinding(kb);
+			const shortcut = keybinding ? keybinding.getLabel() : UNBOUND_COMMAND;
+			return `<span class="shortcut">${strings.escape(shortcut)}</span>`;
 		});
 	}
 
@@ -422,28 +497,51 @@ export class WalkThroughPart extends BaseEditor {
 		const keys = this.content.querySelectorAll('.shortcut[data-command]');
 		Array.prototype.forEach.call(keys, (key: Element) => {
 			const command = key.getAttribute('data-command');
-			const [keybinding] = command && this.keybindingService.lookupKeybindings(command);
-			const label = keybinding ? this.keybindingService.getLabelFor(keybinding) : UNBOUND_COMMAND;
+			const keybinding = command && this.keybindingService.lookupKeybinding(command);
+			const label = keybinding ? keybinding.getLabel() : UNBOUND_COMMAND;
+			while (key.firstChild) {
+				key.removeChild(key.firstChild);
+			}
 			key.appendChild(document.createTextNode(label));
 		});
+		const ifkeys = this.content.querySelectorAll('.if_shortcut[data-command]');
+		Array.prototype.forEach.call(ifkeys, (key: HTMLElement) => {
+			const command = key.getAttribute('data-command');
+			const keybinding = command && this.keybindingService.lookupKeybinding(command);
+			key.style.display = !keybinding ? 'none' : '';
+		});
 	}
+
+	private multiCursorModifier() {
+		const labels = UILabelProvider.modifierLabels[OS];
+		const value = this.configurationService.getValue<string>('editor.multiCursorModifier');
+		const modifier = labels[value === 'ctrlCmd' ? (OS === OperatingSystem.Macintosh ? 'metaKey' : 'ctrlKey') : 'altKey'];
+		const keys = this.content.querySelectorAll('.multi-cursor-modifier');
+		Array.prototype.forEach.call(keys, (key: Element) => {
+			while (key.firstChild) {
+				key.removeChild(key.firstChild);
+			}
+			key.appendChild(document.createTextNode(modifier));
+		});
+	}
+
 	private saveTextEditorViewState(resource: URI): void {
 		const memento = this.getMemento(this.storageService, Scope.WORKSPACE);
-		let editorViewStateMemento = memento[WALK_THROUGH_EDITOR_VIEW_STATE_PREFERENCE_KEY];
+		let editorViewStateMemento: { [key: string]: { [position: number]: IWalkThroughEditorViewState } } = memento[WALK_THROUGH_EDITOR_VIEW_STATE_PREFERENCE_KEY];
 		if (!editorViewStateMemento) {
 			editorViewStateMemento = Object.create(null);
 			memento[WALK_THROUGH_EDITOR_VIEW_STATE_PREFERENCE_KEY] = editorViewStateMemento;
 		}
 
-		const scrollState = this.scrollbar.getScrollState();
+		const scrollPosition = this.scrollbar.getScrollPosition();
 		const editorViewState: IWalkThroughEditorViewState = {
 			viewState: {
-				scrollTop: scrollState.scrollTop,
-				scrollLeft: scrollState.scrollLeft
+				scrollTop: scrollPosition.scrollTop,
+				scrollLeft: scrollPosition.scrollLeft
 			}
 		};
 
-		let fileViewState: IWalkThroughEditorViewStates = editorViewStateMemento[resource.toString()];
+		let fileViewState = editorViewStateMemento[resource.toString()];
 		if (!fileViewState) {
 			fileViewState = Object.create(null);
 			editorViewStateMemento[resource.toString()] = fileViewState;
@@ -456,13 +554,13 @@ export class WalkThroughPart extends BaseEditor {
 
 	private loadTextEditorViewState(resource: URI) {
 		const memento = this.getMemento(this.storageService, Scope.WORKSPACE);
-		const editorViewStateMemento = memento[WALK_THROUGH_EDITOR_VIEW_STATE_PREFERENCE_KEY];
+		const editorViewStateMemento: { [key: string]: IWalkThroughEditorViewStates } = memento[WALK_THROUGH_EDITOR_VIEW_STATE_PREFERENCE_KEY];
 		if (editorViewStateMemento) {
-			const fileViewState: IWalkThroughEditorViewStates = editorViewStateMemento[resource.toString()];
+			const fileViewState = editorViewStateMemento[resource.toString()];
 			if (fileViewState) {
-				const state: IWalkThroughEditorViewState = fileViewState[this.position];
+				const state = fileViewState[this.position];
 				if (state) {
-					this.scrollbar.updateState(state.viewState);
+					this.scrollbar.setScrollPosition(state.viewState);
 				}
 			}
 		}
@@ -489,3 +587,45 @@ export class WalkThroughPart extends BaseEditor {
 		super.dispose();
 	}
 }
+
+// theming
+
+const embeddedEditorBackground = registerColor('walkThrough.embeddedEditorBackground', { dark: null, light: null, hc: null }, localize('walkThrough.embeddedEditorBackground', 'Background color for the embedded editors on the Interactive Playground.'));
+
+registerThemingParticipant((theme, collector) => {
+	const color = getExtraColor(theme, embeddedEditorBackground, { dark: 'rgba(0, 0, 0, .4)', extra_dark: 'rgba(200, 235, 255, .064)', light: 'rgba(0,0,0,.08)', hc: null });
+	if (color) {
+		collector.addRule(`.monaco-workbench > .part.editor > .content .walkThroughContent .monaco-editor-background,
+			.monaco-workbench > .part.editor > .content .walkThroughContent .margin-view-overlays { background: ${color}; }`);
+	}
+	const link = theme.getColor(textLinkForeground);
+	if (link) {
+		collector.addRule(`.monaco-workbench > .part.editor > .content .walkThroughContent a { color: ${link}; }`);
+	}
+	const activeLink = theme.getColor(textLinkActiveForeground);
+	if (activeLink) {
+		collector.addRule(`.monaco-workbench > .part.editor > .content .walkThroughContent a:hover,
+			.monaco-workbench > .part.editor > .content .walkThroughContent a:active { color: ${activeLink}; }`);
+	}
+	const focusColor = theme.getColor(focusBorder);
+	if (focusColor) {
+		collector.addRule(`.monaco-workbench > .part.editor > .content .walkThroughContent a:focus { outline-color: ${focusColor}; }`);
+	}
+	const shortcut = theme.getColor(textPreformatForeground);
+	if (shortcut) {
+		collector.addRule(`.monaco-workbench > .part.editor > .content .walkThroughContent code,
+			.monaco-workbench > .part.editor > .content .walkThroughContent .shortcut { color: ${shortcut}; }`);
+	}
+	const border = theme.getColor(contrastBorder);
+	if (border) {
+		collector.addRule(`.monaco-workbench > .part.editor > .content .walkThroughContent .monaco-editor { border-color: ${border}; }`);
+	}
+	const quoteBackground = theme.getColor(textBlockQuoteBackground);
+	if (quoteBackground) {
+		collector.addRule(`.monaco-workbench > .part.editor > .content .walkThroughContent blockquote { background: ${quoteBackground}; }`);
+	}
+	const quoteBorder = theme.getColor(textBlockQuoteBorder);
+	if (quoteBorder) {
+		collector.addRule(`.monaco-workbench > .part.editor > .content .walkThroughContent blockquote { border-color: ${quoteBorder}; }`);
+	}
+});

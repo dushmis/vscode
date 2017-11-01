@@ -5,79 +5,94 @@
 
 'use strict';
 
-import { ExtensionContext, workspace, window, Disposable } from 'vscode';
-import { findGit, Git } from './git';
-import { Model } from './model';
-import { GitSCMProvider } from './scmProvider';
-import { CommandCenter } from './commands';
-import { CheckoutStatusBar, SyncStatusBar } from './statusbar';
-import { filterEvent, anyEvent } from './util';
-import { GitContentProvider } from './contentProvider';
-import { AutoFetcher } from './autofetch';
-import { MergeDecorator } from './merge';
-import { CommitController } from './commit';
 import * as nls from 'vscode-nls';
+const localize = nls.config(process.env.VSCODE_NLS_CONFIG)();
+import { ExtensionContext, workspace, window, Disposable, commands, Uri } from 'vscode';
+import { findGit, Git, IGit } from './git';
+import { Model } from './model';
+import { CommandCenter } from './commands';
+import { GitContentProvider } from './contentProvider';
+import { GitDecorations } from './decorationProvider';
+import { Askpass } from './askpass';
+import { toDisposable } from './util';
+import TelemetryReporter from 'vscode-extension-telemetry';
 
-const localize = nls.config()();
+async function init(context: ExtensionContext, disposables: Disposable[]): Promise<void> {
+	const { name, version, aiKey } = require(context.asAbsolutePath('./package.json')) as { name: string, version: string, aiKey: string };
+	const telemetryReporter: TelemetryReporter = new TelemetryReporter(name, version, aiKey);
+	disposables.push(telemetryReporter);
 
-async function init(disposables: Disposable[]): Promise<void> {
 	const outputChannel = window.createOutputChannel('Git');
 	disposables.push(outputChannel);
 
 	const config = workspace.getConfiguration('git');
 	const enabled = config.get<boolean>('enabled') === true;
-	const rootPath = workspace.rootPath;
+	const pathHint = workspace.getConfiguration('git').get<string>('path');
+	const info = await findGit(pathHint);
+	const askpass = new Askpass();
+	const env = await askpass.getEnv();
+	const git = new Git({ gitPath: info.path, version: info.version, env });
+	const model = new Model(git);
+	disposables.push(model);
 
-	if (!rootPath || !enabled) {
-		const commandCenter = new CommandCenter(undefined, outputChannel);
+	const onRepository = () => commands.executeCommand('setContext', 'gitOpenRepositoryCount', `${model.repositories.length}`);
+	model.onDidOpenRepository(onRepository, null, disposables);
+	model.onDidCloseRepository(onRepository, null, disposables);
+	onRepository();
+
+	if (!enabled) {
+		const commandCenter = new CommandCenter(git, model, outputChannel, telemetryReporter);
 		disposables.push(commandCenter);
 		return;
 	}
 
-	const fsWatcher = workspace.createFileSystemWatcher('**');
-	const onWorkspaceChange = anyEvent(fsWatcher.onDidChange, fsWatcher.onDidCreate, fsWatcher.onDidDelete);
-	const onGitChange = filterEvent(onWorkspaceChange, uri => /^\.git\//.test(workspace.asRelativePath(uri)));
-
-	const pathHint = workspace.getConfiguration('git').get<string>('path');
-	const info = await findGit(pathHint);
-	const git = new Git({ gitPath: info.path, version: info.version });
-	const repository = git.open(rootPath);
-	const repositoryRoot = await repository.getRoot();
-	const model = new Model(repositoryRoot, repository, onWorkspaceChange);
-
 	outputChannel.appendLine(localize('using git', "Using git {0} from {1}", info.version, info.path));
-	git.onOutput(str => outputChannel.append(str), null, disposables);
 
-	const commitHandler = new CommitController(model);
-	const commandCenter = new CommandCenter(model, outputChannel);
-	const provider = new GitSCMProvider(model, commandCenter);
-	const contentProvider = new GitContentProvider(git, rootPath, onGitChange);
-	const checkoutStatusBar = new CheckoutStatusBar(model);
-	const syncStatusBar = new SyncStatusBar(model);
-	const autoFetcher = new AutoFetcher(model);
-	const mergeDecorator = new MergeDecorator(model);
+	const onOutput = str => outputChannel.append(str);
+	git.onOutput.addListener('log', onOutput);
+	disposables.push(toDisposable(() => git.onOutput.removeListener('log', onOutput)));
 
 	disposables.push(
-		commitHandler,
-		commandCenter,
-		provider,
-		contentProvider,
-		fsWatcher,
-		checkoutStatusBar,
-		syncStatusBar,
-		autoFetcher,
-		mergeDecorator
+		new CommandCenter(git, model, outputChannel, telemetryReporter),
+		new GitContentProvider(model),
+		new GitDecorations(model)
 	);
+
+	await checkGitVersion(info);
 }
 
 export function activate(context: ExtensionContext): any {
-	if (!workspace.rootPath) {
-		return;
-	}
-
 	const disposables: Disposable[] = [];
 	context.subscriptions.push(new Disposable(() => Disposable.from(...disposables).dispose()));
 
-	init(disposables)
+	init(context, disposables)
 		.catch(err => console.error(err));
+}
+
+async function checkGitVersion(info: IGit): Promise<void> {
+	const config = workspace.getConfiguration('git');
+	const shouldIgnore = config.get<boolean>('ignoreLegacyWarning') === true;
+
+	if (shouldIgnore) {
+		return;
+	}
+
+	if (!/^[01]/.test(info.version)) {
+		return;
+	}
+
+	const update = localize('updateGit', "Update Git");
+	const neverShowAgain = localize('neverShowAgain', "Don't show again");
+
+	const choice = await window.showWarningMessage(
+		localize('git20', "You seem to have git {0} installed. Code works best with git >= 2", info.version),
+		update,
+		neverShowAgain
+	);
+
+	if (choice === update) {
+		commands.executeCommand('vscode.open', Uri.parse('https://git-scm.com/'));
+	} else if (choice === neverShowAgain) {
+		await config.update('ignoreLegacyWarning', true, true);
+	}
 }

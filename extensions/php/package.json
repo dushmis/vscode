@@ -27,6 +27,7 @@
 					"PHP",
 					"php"
 				],
+				"firstLine": "^#!/.*\\bphp\\b",
 				"mimetypes": [
 					"application/x-php"
 				],
@@ -94,14 +95,29 @@
 				"fileMatch": "composer.json",
 				"url": "https://getcomposer.org/schema.json"
 			}
-		]
+		],
+		"commands": [
+			{
+				"title": "%command.untrustValidationExecutable%",
+				"category": "%commands.categroy.php%",
+				"command": "php.untrustValidationExecutable"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "php.untrustValidationExecutable",
+					"when": "php.untrustValidationExecutableContext"
+				}
+			]
+		}
 	},
 	"scripts": {
 		"compile": "gulp compile-extension:php",
 		"watch": "gulp watch-extension:php",
-		"update-grammar": "node ../../build/npm/update-grammar.js atom/language-php grammars/php.cson ./syntaxes/php.tmLanguage.json"
+		"update-grammar": "node ./build/update-grammar.js"
 	},
 	"devDependencies": {
-		"@types/node": "^7.0.4"
+		"@types/node": "7.0.43"
 	}
 }

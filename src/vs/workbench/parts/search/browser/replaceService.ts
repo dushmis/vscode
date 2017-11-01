@@ -19,9 +19,9 @@ import { BulkEdit, IResourceEdit, createBulkEdit } from 'vs/editor/common/servic
 import { IProgressRunner } from 'vs/platform/progress/common/progress';
 import { IDiffEditor } from 'vs/editor/browser/editorBrowser';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
-import { ITextModelResolverService, ITextModelContentProvider } from 'vs/editor/common/services/resolverService';
+import { ITextModelService, ITextModelContentProvider } from 'vs/editor/common/services/resolverService';
 import { IWorkbenchContribution } from 'vs/workbench/common/contributions';
-import { IModel } from 'vs/editor/common/editorCommon';
+import { IModel, ScrollType } from 'vs/editor/common/editorCommon';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { IFileService } from 'vs/platform/files/common/files';
 
@@ -39,7 +39,7 @@ export class ReplacePreviewContentProvider implements ITextModelContentProvider,
 
 	constructor(
 		@IInstantiationService private instantiationService: IInstantiationService,
-		@ITextModelResolverService private textModelResolverService: ITextModelResolverService
+		@ITextModelService private textModelResolverService: ITextModelService
 	) {
 		this.textModelResolverService.registerTextModelContentProvider(network.Schemas.internal, this);
 	}
@@ -60,7 +60,7 @@ class ReplacePreviewModel extends Disposable {
 	constructor(
 		@IModelService private modelService: IModelService,
 		@IModeService private modeService: IModeService,
-		@ITextModelResolverService private textModelResolverService: ITextModelResolverService,
+		@ITextModelService private textModelResolverService: ITextModelService,
 		@IReplaceService private replaceService: IReplaceService,
 		@ISearchWorkbenchService private searchWorkbenchService: ISearchWorkbenchService
 	) {
@@ -77,7 +77,7 @@ class ReplacePreviewModel extends Disposable {
 			const replacePreviewModel = this.modelService.createModel(sourceModel.getValue(), this.modeService.getOrCreateMode(sourceModelModeId), replacePreviewUri);
 			this._register(fileMatch.onChange(modelChange => this.update(sourceModel, replacePreviewModel, fileMatch, modelChange)));
 			this._register(this.searchWorkbenchService.searchModel.onReplaceTermChanged(() => this.update(sourceModel, replacePreviewModel, fileMatch)));
-			this._register(fileMatch.onDispose(() => replacePreviewModel.dispose()));
+			this._register(fileMatch.onDispose(() => replacePreviewModel.dispose())); // TODO@Sandeep we should not dispose a model directly but rather the reference (depends on https://github.com/Microsoft/vscode/issues/17073)
 			this._register(replacePreviewModel.onWillDispose(() => this.dispose()));
 			this._register(sourceModel.onWillDispose(() => this.dispose()));
 			return replacePreviewModel;
@@ -100,7 +100,7 @@ export class ReplaceService implements IReplaceService {
 		@IFileService private fileService: IFileService,
 		@IEditorService private editorService: IWorkbenchEditorService,
 		@IInstantiationService private instantiationService: IInstantiationService,
-		@ITextModelResolverService private textModelResolverService: ITextModelResolverService,
+		@ITextModelService private textModelResolverService: ITextModelService,
 		@ISearchWorkbenchService private searchWorkbenchService: ISearchWorkbenchService
 	) {
 	}
@@ -137,6 +137,9 @@ export class ReplaceService implements IReplaceService {
 	}
 
 	public openReplacePreview(element: FileMatchOrMatch, preserveFocus?: boolean, sideBySide?: boolean, pinned?: boolean): TPromise<any> {
+		/* __GDPR__
+			"replace.open.previewEditor" : {}
+		*/
 		this.telemetryService.publicLog('replace.open.previewEditor');
 		const fileMatch = element instanceof Match ? element.parent() : element;
 
@@ -153,7 +156,7 @@ export class ReplaceService implements IReplaceService {
 			this.updateReplacePreview(fileMatch).then(() => {
 				let editorControl = (<IDiffEditor>editor.getControl());
 				if (element instanceof Match) {
-					editorControl.revealLineInCenter(element.range().startLineNumber);
+					editorControl.revealLineInCenter(element.range().startLineNumber, ScrollType.Immediate);
 				}
 			});
 		}, errors.onUnexpectedError);

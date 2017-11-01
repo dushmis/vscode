@@ -10,9 +10,9 @@
 		"experimentalDecorators": true,
 		"declaration": true,
 		"noImplicitReturns": true,
+		"baseUrl": ".",
 		"typeRoots": [
-			"typings",
-			"../node_modules/@types"
+			"typings"
 		]
 	}
 }

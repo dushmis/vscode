@@ -5,50 +5,92 @@
 
 'use strict';
 
-import { assign } from 'vs/base/common/objects';
-import { join } from 'path';
-import { generateUuid } from 'vs/base/common/uuid';
-import { TPromise } from 'vs/base/common/winjs.base';
-import { Registry } from 'vs/platform/platform';
-import { writeFile } from 'vs/base/node/pfs';
-import { IWindowsService } from 'vs/platform/windows/common/windows';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { IExtensionService } from 'vs/platform/extensions/common/extensions';
-import { ITimerService } from 'vs/workbench/services/timer/common/timerService';
+import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
+import { IMessageService } from 'vs/platform/message/common/message';
+import { ILifecycleService, LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
+import { IWindowsService } from 'vs/platform/windows/common/windows';
 import { IWorkbenchContributionsRegistry, IWorkbenchContribution, Extensions } from 'vs/workbench/common/contributions';
-import product from 'vs/platform/node/product';
+import { Registry } from 'vs/platform/registry/common/platform';
+import { ReportPerformanceIssueAction } from 'vs/workbench/electron-browser/actions';
+import { TPromise } from 'vs/base/common/winjs.base';
+import { join } from 'path';
+import { localize } from 'vs/nls';
+import { toPromise, filterEvent } from 'vs/base/common/event';
+import { readdir } from 'vs/base/node/pfs';
+import { stopProfiling } from 'vs/base/node/profiler';
 
-class PerformanceContribution implements IWorkbenchContribution {
+class StartupProfiler implements IWorkbenchContribution {
 
 	constructor(
-		@IWindowsService private _windowsService: IWindowsService,
-		@ITimerService private _timerService: ITimerService,
-		@IEnvironmentService envService: IEnvironmentService,
-		@IExtensionService extensionService: IExtensionService
+		@IWindowsService private readonly _windowsService: IWindowsService,
+		@IMessageService private readonly _messageService: IMessageService,
+		@IEnvironmentService private readonly _environmentService: IEnvironmentService,
+		@IInstantiationService private readonly _instantiationService: IInstantiationService,
+		@ILifecycleService lifecycleService: ILifecycleService,
+		@IExtensionService extensionService: IExtensionService,
 	) {
-
-		const dumpFile = envService.args['prof-startup-timers'];
-		if (dumpFile) {
-			// wait for extensions being loaded
-			extensionService.onReady()
-				.then(() => TPromise.timeout(15000)) // time service isn't ready yet because it listens on the same event...
-				.then(() => this._dumpTimersAndQuit(dumpFile))
-				.done(undefined, err => console.error(err));
-		}
+		// wait for everything to be ready
+		TPromise.join<any>([
+			extensionService.onReady(),
+			toPromise(filterEvent(lifecycleService.onDidChangePhase, phase => phase === LifecyclePhase.Running)),
+		]).then(() => {
+			this._stopProfiling();
+		});
 	}
 
 	getId(): string {
-		return 'performance';
+		return 'performance.StartupProfiler';
 	}
 
-	private _dumpTimersAndQuit(folder: string) {
-		const metrics = this._timerService.startupMetrics;
-		const id = generateUuid();
-		const all = assign({ id, commit: product.commit }, metrics);
-		const raw = JSON.stringify(all);
-		return writeFile(join(folder, `timers-${id}.json`), raw).then(() => this._windowsService.quit());
+	private _stopProfiling(): void {
+
+		const { profileStartup } = this._environmentService;
+		if (!profileStartup) {
+			return;
+		}
+
+		stopProfiling(profileStartup.dir, profileStartup.prefix).then(() => {
+			readdir(profileStartup.dir).then(files => {
+				return files.filter(value => value.indexOf(profileStartup.prefix) === 0);
+			}).then(files => {
+				const profileFiles = files.reduce((prev, cur) => `${prev}${join(profileStartup.dir, cur)}\n`, '\n');
+
+				const primaryButton = this._messageService.confirmSync({
+					type: 'info',
+					message: localize('prof.message', "Successfully created profiles."),
+					detail: localize('prof.detail', "Please create an issue and manually attach the following files:\n{0}", profileFiles),
+					primaryButton: localize('prof.restartAndFileIssue', "Create Issue and Restart"),
+					secondaryButton: localize('prof.restart', "Restart")
+				});
+
+				if (primaryButton) {
+					const action = this._instantiationService.createInstance(ReportPerformanceIssueAction, ReportPerformanceIssueAction.ID, ReportPerformanceIssueAction.LABEL);
+					TPromise.join<any>([
+						this._windowsService.showItemInFolder(join(profileStartup.dir, files[0])),
+						action.run(`:warning: Make sure to **attach** these files from your *home*-directory: :warning:\n${files.map(file => `-\`${file}\``).join('\n')}`)
+					]).then(() => {
+						// keep window stable until restart is selected
+						this._messageService.confirmSync({
+							type: 'info',
+							message: localize('prof.thanks', "Thanks for helping us."),
+							detail: localize('prof.detail.restart', "A final restart is required to continue to use '{0}'. Again, thank you for your contribution.", this._environmentService.appNameLong),
+							primaryButton: localize('prof.restart', "Restart"),
+							secondaryButton: null
+						});
+						// now we are ready to restart
+						this._windowsService.relaunch({ removeArgs: ['--prof-startup'] });
+					});
+
+				} else {
+					// simply restart
+					this._windowsService.relaunch({ removeArgs: ['--prof-startup'] });
+				}
+			});
+		});
 	}
 }
 
 const registry = Registry.as<IWorkbenchContributionsRegistry>(Extensions.Workbench);
-registry.registerWorkbenchContribution(PerformanceContribution);
+registry.registerWorkbenchContribution(StartupProfiler);

@@ -10,22 +10,33 @@ import URI from 'vs/base/common/uri';
 import { isFalsyOrEmpty } from 'vs/base/common/arrays';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { Range } from 'vs/editor/common/core/range';
-import { IReadOnlyModel, ISingleEditOperation } from 'vs/editor/common/editorCommon';
+import { IReadOnlyModel } from 'vs/editor/common/editorCommon';
 import { CommonEditorRegistry } from 'vs/editor/common/editorCommonExtensions';
-import { DocumentFormattingEditProviderRegistry, DocumentRangeFormattingEditProviderRegistry, OnTypeFormattingEditProviderRegistry, FormattingOptions } from 'vs/editor/common/modes';
+import { DocumentFormattingEditProviderRegistry, DocumentRangeFormattingEditProviderRegistry, OnTypeFormattingEditProviderRegistry, FormattingOptions, TextEdit } from 'vs/editor/common/modes';
 import { IModelService } from 'vs/editor/common/services/modelService';
 import { asWinJsPromise, sequence } from 'vs/base/common/async';
 import { Position } from 'vs/editor/common/core/position';
 
-export function getDocumentRangeFormattingEdits(model: IReadOnlyModel, range: Range, options: FormattingOptions): TPromise<ISingleEditOperation[]> {
+export class NoProviderError extends Error {
+
+	static readonly Name = 'NOPRO';
+
+	constructor(message?: string) {
+		super();
+		this.name = NoProviderError.Name;
+		this.message = message;
+	}
+}
+
+export function getDocumentRangeFormattingEdits(model: IReadOnlyModel, range: Range, options: FormattingOptions): TPromise<TextEdit[], NoProviderError> {
 
 	const providers = DocumentRangeFormattingEditProviderRegistry.ordered(model);
 
 	if (providers.length === 0) {
-		return TPromise.as(undefined);
+		return TPromise.wrapError(new NoProviderError());
 	}
 
-	let result: ISingleEditOperation[];
+	let result: TextEdit[];
 	return sequence(providers.map(provider => {
 		if (isFalsyOrEmpty(result)) {
 			return () => {
@@ -38,7 +49,7 @@ export function getDocumentRangeFormattingEdits(model: IReadOnlyModel, range: Ra
 	})).then(() => result);
 }
 
-export function getDocumentFormattingEdits(model: IReadOnlyModel, options: FormattingOptions): TPromise<ISingleEditOperation[]> {
+export function getDocumentFormattingEdits(model: IReadOnlyModel, options: FormattingOptions): TPromise<TextEdit[]> {
 	const providers = DocumentFormattingEditProviderRegistry.ordered(model);
 
 	// try range formatters when no document formatter is registered
@@ -46,7 +57,7 @@ export function getDocumentFormattingEdits(model: IReadOnlyModel, options: Forma
 		return getDocumentRangeFormattingEdits(model, model.getFullModelRange(), options);
 	}
 
-	let result: ISingleEditOperation[];
+	let result: TextEdit[];
 	return sequence(providers.map(provider => {
 		if (isFalsyOrEmpty(result)) {
 			return () => {
@@ -59,7 +70,7 @@ export function getDocumentFormattingEdits(model: IReadOnlyModel, options: Forma
 	})).then(() => result);
 }
 
-export function getOnTypeFormattingEdits(model: IReadOnlyModel, position: Position, ch: string, options: FormattingOptions): TPromise<ISingleEditOperation[]> {
+export function getOnTypeFormattingEdits(model: IReadOnlyModel, position: Position, ch: string, options: FormattingOptions): TPromise<TextEdit[]> {
 	const [support] = OnTypeFormattingEditProviderRegistry.ordered(model);
 	if (!support) {
 		return TPromise.as(undefined);
@@ -74,7 +85,7 @@ export function getOnTypeFormattingEdits(model: IReadOnlyModel, position: Positi
 }
 
 CommonEditorRegistry.registerLanguageCommand('_executeFormatRangeProvider', function (accessor, args) {
-	const {resource, range, options} = args;
+	const { resource, range, options } = args;
 	if (!(resource instanceof URI) || !Range.isIRange(range)) {
 		throw illegalArgument();
 	}
@@ -86,7 +97,7 @@ CommonEditorRegistry.registerLanguageCommand('_executeFormatRangeProvider', func
 });
 
 CommonEditorRegistry.registerLanguageCommand('_executeFormatDocumentProvider', function (accessor, args) {
-	const {resource, options} = args;
+	const { resource, options } = args;
 	if (!(resource instanceof URI)) {
 		throw illegalArgument('resource');
 	}
@@ -99,7 +110,7 @@ CommonEditorRegistry.registerLanguageCommand('_executeFormatDocumentProvider', f
 });
 
 CommonEditorRegistry.registerDefaultLanguageCommand('_executeFormatOnTypeProvider', function (model, position, args) {
-	const {ch, options } = args;
+	const { ch, options } = args;
 	if (typeof ch !== 'string') {
 		throw illegalArgument('ch');
 	}
